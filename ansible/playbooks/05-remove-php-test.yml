@@ -1,0 +1,14 @@
+---
+- name: Motorcade – remove PHP test file
+  hosts: motorcade
+  become: true
+
+  vars:
+    web_root: /var/www/motorcade
+
+  tasks:
+    - name: Remove phpinfo test file
+      ansible.builtin.file:
+        path: "{{ web_root }}/index.php"
+        state: absent
+

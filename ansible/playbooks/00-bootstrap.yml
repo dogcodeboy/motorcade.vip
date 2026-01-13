@@ -1,0 +1,42 @@
+- name: Motorcade web bootstrap (Amazon Linux 2023)
+  hosts: motorcade
+  become: true
+
+  vars:
+    packages:
+      - nginx
+      - mariadb105-server
+      - php
+      - php-fpm
+      - php-mysqlnd
+      - php-gd
+      - php-mbstring
+      - php-xml
+      - php-json
+      - unzip
+      - tar
+      - git
+      # curl intentionally NOT here
+
+  tasks:
+    - name: Replace curl-minimal with curl
+      ansible.builtin.dnf:
+        name: curl-minimal
+        state: absent
+
+    - name: Install curl
+      ansible.builtin.dnf:
+        name: curl
+        state: present
+
+    - name: Update all packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: true
+
+    - name: Install required packages
+      ansible.builtin.dnf:
+        name: "{{ packages }}"
+        state: present
+

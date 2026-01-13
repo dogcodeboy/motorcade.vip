@@ -1,0 +1,24 @@
+---
+- name: Motorcade – enable and start services
+  hosts: motorcade
+  become: true
+
+  tasks:
+    - name: Enable and start MariaDB
+      ansible.builtin.service:
+        name: mariadb
+        enabled: true
+        state: started
+
+    - name: Enable and start PHP-FPM
+      ansible.builtin.service:
+        name: php-fpm
+        enabled: true
+        state: started
+
+    - name: Enable and start Nginx
+      ansible.builtin.service:
+        name: nginx
+        enabled: true
+        state: started
+

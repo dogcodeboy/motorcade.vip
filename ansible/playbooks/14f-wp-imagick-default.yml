@@ -1,0 +1,28 @@
+---
+- name: Motorcade - 14f Force WordPress to prefer Imagick (no rebuilds)
+  hosts: motorcade-web-01
+  become: true
+  vars:
+    wp_config_path: /var/www/motorcade/wp-config.php
+
+  tasks:
+    - name: Assert wp-config.php exists
+      ansible.builtin.stat:
+        path: "{{ wp_config_path }}"
+      register: wp_config
+
+    - name: Fail if wp-config.php not found
+      ansible.builtin.fail:
+        msg: "wp-config.php not found at {{ wp_config_path }}"
+      when: not wp_config.stat.exists
+
+    - name: Force WordPress image editor to Imagick
+      ansible.builtin.lineinfile:
+        path: "{{ wp_config_path }}"
+        insertafter: "^/\\*\\*"
+        line: "define('WP_IMAGE_EDITORS', ['WP_Image_Editor_Imagick']);"
+        state: present
+
+    - name: Show confirmation
+      ansible.builtin.debug:
+        msg: "WordPress is now forced to use Imagick as the image editor"

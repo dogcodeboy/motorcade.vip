@@ -1,0 +1,90 @@
+---
+- name: "Motorcade - 14a2 Force PHP minor repo selection (AL2023)"
+  hosts: motorcade
+  become: true
+
+  vars:
+    target_minor: "8.3"
+    fallback_minor: "8.2"
+
+  tasks:
+    - name: Assert Amazon Linux 2023
+      assert:
+        that:
+          - ansible_facts.distribution == "Amazon"
+          - (ansible_facts.distribution_major_version | int) >= 2023
+        fail_msg: "This playbook only supports Amazon Linux 2023"
+
+    - name: List enabled repos
+      command: dnf repolist
+      register: repolist
+      changed_when: false
+
+    - name: Show enabled repos
+      debug:
+        var: repolist.stdout_lines
+
+    - name: Show php-cli duplicates (what repos actually provide)
+      shell: |
+        set -euo pipefail
+        dnf -q list --showduplicates php-cli || true
+      register: php_dupes
+      changed_when: false
+
+    - name: Print php-cli duplicate list
+      debug:
+        var: php_dupes.stdout_lines
+
+    - name: Remove php to prepare for switch
+      dnf:
+        name: "php*"
+        state: absent
+
+    - name: Clean metadata
+      command: dnf clean all
+
+    - name: Update metadata
+      dnf:
+        update_cache: true
+
+    - name: Attempt install php-cli constrained to target minor (best-effort)
+      shell: |
+        set -euo pipefail
+        # Try to install a version that begins with target minor, else fallback.
+        if dnf -q list --showduplicates php-cli | awk '{print $2}' | grep -qE '^{{ target_minor }}\.'; then
+          ver="$(dnf -q list --showduplicates php-cli | awk '{print $2}' | grep -E '^{{ target_minor }}\.' | tail -n1)"
+          dnf -y install "php-cli-{{'%' }}{{ ver }}"
+        else
+          ver="$(dnf -q list --showduplicates php-cli | awk '{print $2}' | grep -E '^{{ fallback_minor }}\.' | tail -n1)"
+          [ -n "$ver" ] || (echo "Neither {{ target_minor }} nor {{ fallback_minor }} found in repos." && exit 2)
+          dnf -y install "php-cli-{{'%' }}{{ ver }}"
+        fi
+      args:
+        executable: /bin/bash
+      register: constrained_install
+      changed_when: true
+
+    - name: Install remaining php stack
+      dnf:
+        name:
+          - php-fpm
+          - php-common
+          - php-mysqlnd
+          - php-gd
+          - php-xml
+          - php-mbstring
+          - php-opcache
+          - php-json
+          - php-curl
+          - php-zip
+          - php-devel
+        state: present
+
+    - name: Verify PHP major.minor after repo switch
+      shell: php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;'
+      register: php_mm
+      changed_when: false
+
+    - name: Show final PHP version
+      debug:
+        msg: "Final PHP major.minor: {{ php_mm.stdout }}"

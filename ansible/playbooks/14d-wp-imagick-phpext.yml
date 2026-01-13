@@ -1,0 +1,181 @@
+---
+- name: "Motorcade - 14d Install PHP imagick extension (AL2023 + PHP 8.4) - deterministic"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    build_root: "/usr/local/src/motorcade-build"
+    imagick_git_repo: "https://github.com/Imagick/imagick.git"
+    imagick_git_ref: "master"
+    imagick_ini_name: "50-imagick.ini"
+
+    imagick_build_deps:
+      - php-devel
+      - php-pear
+      - gcc
+      - gcc-c++
+      - make
+      - autoconf
+      - automake
+      - libtool
+      - pkgconf-pkg-config
+      - git
+      - ImageMagick-devel
+      - libjpeg-turbo-devel
+      - libpng-devel
+      - freetype-devel
+      - libwebp-devel
+      - libtiff-devel
+      - bzip2-devel
+      - xz-devel
+      - zlib-devel
+      - libxml2-devel
+
+  tasks:
+    - name: Assert Amazon Linux 2023
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == "Amazon"
+          - ansible_facts.distribution_major_version | int == 2023
+        fail_msg: "This playbook is for Amazon Linux 2023 only."
+
+    - name: Assert PHP is 8.4 baseline
+      ansible.builtin.command: bash -lc "php -r 'echo PHP_MAJOR_VERSION.\".\".PHP_MINOR_VERSION;'"
+      register: php_mm
+      changed_when: false
+
+    - name: Enforce PHP 8.4 for imagick build/load
+      ansible.builtin.assert:
+        that:
+          - php_mm.stdout == "8.4"
+        fail_msg: "PHP {{ php_mm.stdout }} detected. This imagick playbook expects PHP 8.4 on AL2023."
+
+    - name: Install imagick build dependencies
+      ansible.builtin.dnf:
+        name: "{{ imagick_build_deps }}"
+        state: present
+
+    - name: Ensure build root exists
+      ansible.builtin.file:
+        path: "{{ build_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Determine PHP extension dir
+      ansible.builtin.command: bash -lc "php-config --extension-dir"
+      register: php_ext_dir
+      changed_when: false
+
+    - name: Determine PHP ini scan dir
+      ansible.builtin.shell: |
+        set -e
+        php --ini | awk -F': ' '/Scan for additional .ini files in:/{print $2}'
+      args:
+        executable: /bin/bash
+      register: php_ini_scan_dir
+      changed_when: false
+
+    - name: Ensure ini scan dir exists
+      ansible.builtin.file:
+        path: "{{ php_ini_scan_dir.stdout }}"
+        state: directory
+        mode: "0755"
+
+    - name: Print key paths (preflight)
+      ansible.builtin.debug:
+        msg:
+          - "PHP ext dir: {{ php_ext_dir.stdout }}"
+          - "PHP ini scan dir: {{ php_ini_scan_dir.stdout }}"
+          - "php-config: {{ lookup('ansible.builtin.pipe','command -v php-config') }}"
+          - "phpize: {{ lookup('ansible.builtin.pipe','command -v phpize') }}"
+          - "magick (if from /usr/local): {{ lookup('ansible.builtin.pipe','command -v magick || true') }}"
+
+    - name: Stop php-fpm before swapping modules
+      ansible.builtin.systemd:
+        name: php-fpm
+        state: stopped
+      failed_when: false
+
+    - name: Remove old imagick ini(s)
+      ansible.builtin.file:
+        path: "{{ php_ini_scan_dir.stdout }}/{{ item }}"
+        state: absent
+      loop:
+        - "imagick.ini"
+        - "20-imagick.ini"
+        - "50-imagick.ini"
+
+    - name: Remove old imagick.so from extension dir if present
+      ansible.builtin.file:
+        path: "{{ php_ext_dir.stdout }}/imagick.so"
+        state: absent
+
+    - name: Remove previous imagick source dir
+      ansible.builtin.file:
+        path: "{{ build_root }}/imagick"
+        state: absent
+
+    - name: Clone imagick (master for PHP 8.4 compatibility)
+      ansible.builtin.git:
+        repo: "{{ imagick_git_repo }}"
+        dest: "{{ build_root }}/imagick"
+        version: "{{ imagick_git_ref }}"
+        force: true
+
+    - name: Build imagick against correct PHP and ImageMagick
+      ansible.builtin.shell: |
+        set -euo pipefail
+        export PATH="/usr/local/bin:$PATH"
+        export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig:/usr/lib64/pkgconfig:/usr/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+        phpize
+        ./configure
+        make -j"$(nproc)"
+      args:
+        chdir: "{{ build_root }}/imagick"
+        executable: /bin/bash
+
+    - name: Install imagick.so into PHP extension dir
+      ansible.builtin.shell: |
+        set -euo pipefail
+        make install
+      args:
+        chdir: "{{ build_root }}/imagick"
+        executable: /bin/bash
+
+    - name: Write imagick ini into PHP scan dir
+      ansible.builtin.copy:
+        dest: "{{ php_ini_scan_dir.stdout }}/{{ imagick_ini_name }}"
+        content: |
+          ; Motorcade - imagick extension
+          extension=imagick.so
+        mode: "0644"
+
+    - name: Run ldconfig
+      ansible.builtin.command: ldconfig
+      changed_when: true
+
+    - name: Start php-fpm
+      ansible.builtin.systemd:
+        name: php-fpm
+        state: started
+      failed_when: false
+
+    - name: Verify imagick loads (CLI)
+      ansible.builtin.shell: |
+        set -e
+        php -m | grep -i '^imagick$'
+      args:
+        executable: /bin/bash
+      register: imagick_cli_verify
+      changed_when: false
+
+    - name: Verify imagick info
+      ansible.builtin.command: bash -lc "php --ri imagick | head -n 60"
+      register: imagick_ri
+      changed_when: false
+
+    - name: Print imagick --ri (first 60 lines)
+      ansible.builtin.debug:
+        var: imagick_ri.stdout_lines
+

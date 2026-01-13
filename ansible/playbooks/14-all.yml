@@ -1,0 +1,6 @@
+---
+- import_playbook: 14a-php-baseline.yml
+- import_playbook: 14b-wp-imagick-preflight.yml
+- import_playbook: 14c-wp-imagick-imagemagick.yml
+- import_playbook: 14d-wp-imagick-phpext.yml
+

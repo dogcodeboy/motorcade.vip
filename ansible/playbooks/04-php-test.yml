@@ -1,0 +1,19 @@
+---
+- name: Motorcade – PHP execution test
+  hosts: motorcade
+  become: true
+
+  vars:
+    web_root: /var/www/motorcade
+
+  tasks:
+    - name: Create PHP test file
+      ansible.builtin.copy:
+        dest: "{{ web_root }}/index.php"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+        content: |
+          <?php
+          phpinfo();
+

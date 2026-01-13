@@ -1,0 +1,5 @@
+# Example non-secret defaults for this inventory.
+# Secrets should live in Ansible Vault (e.g. ansible/group_vars/all/vault.yml)
+
+# wp_site_url: "https://motorcade.vip"
+# wp_home_url: "https://motorcade.vip"

@@ -1,0 +1,191 @@
+---
+- name: Motorcade - WordPress upload limits, PHP memory, and media processing
+  hosts: motorcade
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+
+    # ---- Set these HIGH (but realistic) ----
+    # Max single file upload size
+    upload_max_filesize: "256M"
+    post_max_size: "256M"
+
+    # PHP memory limit (image processing + plugins can need this)
+    php_memory_limit: "1024M"   # 1GB
+
+    # PHP execution/input timeouts (large uploads + processing)
+    max_execution_time: 600
+    max_input_time: 600
+    max_input_vars: 10000
+
+    # Nginx request body size limit (must be >= upload_max_filesize)
+    nginx_client_max_body_size: "256M"
+
+    # Wordpress helpful constant (optional but nice)
+    wp_memory_limit: "512M"
+    wp_max_memory_limit: "1024M"
+
+    # Image processing (Imagick recommended; GD fallback)
+    install_imagick: true
+
+    # ---- Paths (Amazon Linux typical) ----
+    # We'll auto-detect the active php.ini where possible, but keep safe defaults.
+    php_fpm_pool_conf: "/etc/php-fpm.d/www.conf"
+    php_ini_candidates:
+      - "/etc/php.ini"
+      - "/etc/php.d/99-motorcade.ini"
+    php_custom_ini: "/etc/php.d/99-motorcade.ini"
+
+    nginx_conf_dir: "/etc/nginx"
+    nginx_conf_d: "/etc/nginx/conf.d"
+    nginx_custom_conf: "/etc/nginx/conf.d/99-motorcade-limits.conf"
+
+  tasks:
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    # -----------------------------
+    # 1) Ensure required packages
+    # -----------------------------
+    - name: Ensure tools for media processing are installed
+      ansible.builtin.package:
+        name:
+          - php-fpm
+          - php
+          - php-cli
+          - php-gd
+          - unzip
+          - zip
+          - ImageMagick
+        state: present
+
+    - name: Install Imagick extension (if enabled, package varies by distro)
+      ansible.builtin.package:
+        name:
+          - php-pecl-imagick
+        state: present
+      when: install_imagick
+      ignore_errors: true  # some repos don't have it; GD will still work
+
+    # -------------------------------------------------------
+    # 2) PHP limits via a dedicated override ini (safe/idempotent)
+    # -------------------------------------------------------
+    - name: Write Motorcade PHP override ini
+      ansible.builtin.copy:
+        dest: "{{ php_custom_ini }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          ; Motorcade overrides (managed by Ansible)
+          upload_max_filesize = {{ upload_max_filesize }}
+          post_max_size = {{ post_max_size }}
+          memory_limit = {{ php_memory_limit }}
+          max_execution_time = {{ max_execution_time }}
+          max_input_time = {{ max_input_time }}
+          max_input_vars = {{ max_input_vars }}
+
+          ; Helpful for uploads
+          file_uploads = On
+
+          ; Some WordPress installs benefit from higher realpath cache
+          realpath_cache_size = 4096K
+          realpath_cache_ttl = 600
+      notify: Restart php-fpm
+
+    # -------------------------------------------------------
+    # 3) Ensure PHP-FPM pool runs as nginx (aligns with your earlier fixes)
+    #    If your playbook 12 already enforces this, this is harmless.
+    # -------------------------------------------------------
+    - name: Ensure php-fpm pool user is nginx
+      ansible.builtin.lineinfile:
+        path: "{{ php_fpm_pool_conf }}"
+        regexp: '^user\s*='
+        line: 'user = nginx'
+      notify: Restart php-fpm
+
+    - name: Ensure php-fpm pool group is nginx
+      ansible.builtin.lineinfile:
+        path: "{{ php_fpm_pool_conf }}"
+        regexp: '^group\s*='
+        line: 'group = nginx'
+      notify: Restart php-fpm
+
+    # -------------------------------------------------------
+    # 4) Nginx client_max_body_size (global include)
+    #    This avoids needing to guess which server block file to edit.
+    # -------------------------------------------------------
+    - name: Write nginx limits include
+      ansible.builtin.copy:
+        dest: "{{ nginx_custom_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Motorcade upload limits (managed by Ansible)
+          client_max_body_size {{ nginx_client_max_body_size }};
+      notify: Reload nginx
+
+    - name: Test nginx config
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    # -------------------------------------------------------
+    # 5) WordPress memory constants (optional but useful)
+    # -------------------------------------------------------
+    - name: Ensure WP_MEMORY_LIMIT is set
+      ansible.builtin.lineinfile:
+        path: "{{ wp_root }}/wp-config.php"
+        regexp: "define\\(\\s*'WP_MEMORY_LIMIT'\\s*,"
+        line: "define('WP_MEMORY_LIMIT', '{{ wp_memory_limit }}');"
+        insertbefore: "/* That's all, stop editing! */"
+      ignore_errors: true
+
+    - name: Ensure WP_MAX_MEMORY_LIMIT is set
+      ansible.builtin.lineinfile:
+        path: "{{ wp_root }}/wp-config.php"
+        regexp: "define\\(\\s*'WP_MAX_MEMORY_LIMIT'\\s*,"
+        line: "define('WP_MAX_MEMORY_LIMIT', '{{ wp_max_memory_limit }}');"
+        insertbefore: "/* That's all, stop editing! */"
+      ignore_errors: true
+
+    # -------------------------------------------------------
+    # 6) Verification (fast sanity checks)
+    # -------------------------------------------------------
+    - name: Show effective PHP settings (from CLI)
+      ansible.builtin.shell: |
+        php -r 'echo "upload_max_filesize=".ini_get("upload_max_filesize").PHP_EOL;
+               echo "post_max_size=".ini_get("post_max_size").PHP_EOL;
+               echo "memory_limit=".ini_get("memory_limit").PHP_EOL;
+               echo "max_execution_time=".ini_get("max_execution_time").PHP_EOL;'
+      register: php_limits
+      changed_when: false
+
+    - name: Print PHP limits
+      ansible.builtin.debug:
+        var: php_limits.stdout_lines
+
+    - name: Verify nginx is allowing large uploads
+      ansible.builtin.shell: |
+        nginx -T 2>/dev/null | grep -n "client_max_body_size" | tail -n 5 || true
+      register: nginx_limits
+      changed_when: false
+
+    - name: Print nginx client_max_body_size lines
+      ansible.builtin.debug:
+        var: nginx_limits.stdout_lines
+
+  handlers:
+    - name: Restart php-fpm
+      ansible.builtin.service:
+        name: php-fpm
+        state: restarted
+        enabled: true
+
+    - name: Reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+        enabled: true

@@ -1,0 +1,121 @@
+---
+- name: "Motorcade - 14c Build/install ImageMagick from source (pinned tag) on AL2023"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    build_root: "/usr/local/src/motorcade-build"
+    imagemagick_git_repo: "https://github.com/ImageMagick/ImageMagick.git"
+    imagemagick_tag: "7.1.1-43"
+    force_rebuild: false
+
+    imagemagick_build_deps:
+      - gcc
+      - gcc-c++
+      - make
+      - autoconf
+      - automake
+      - libtool
+      - pkgconf-pkg-config
+      - git
+      - libjpeg-turbo-devel
+      - libpng-devel
+      - freetype-devel
+      - libwebp-devel
+      - libtiff-devel
+      - bzip2-devel
+      - xz-devel
+      - zlib-devel
+      - libxml2-devel
+
+  tasks:
+    - name: Assert Amazon Linux 2023
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == "Amazon"
+          - ansible_facts.distribution_major_version | int == 2023
+        fail_msg: "This playbook is for Amazon Linux 2023 only."
+
+    - name: Install ImageMagick build dependencies
+      ansible.builtin.dnf:
+        name: "{{ imagemagick_build_deps }}"
+        state: present
+
+    - name: Ensure build root exists
+      ansible.builtin.file:
+        path: "{{ build_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Check if magick exists
+      ansible.builtin.command: bash -lc "command -v magick || true"
+      register: magick_path
+      changed_when: false
+
+    - name: Decide if ImageMagick rebuild is needed
+      ansible.builtin.set_fact:
+        do_rebuild: "{{ force_rebuild or (magick_path.stdout | length == 0) }}"
+
+    - name: Remove previous ImageMagick source dir if rebuilding
+      ansible.builtin.file:
+        path: "{{ build_root }}/ImageMagick"
+        state: absent
+      when: do_rebuild
+
+    - name: Clone ImageMagick (pinned tag)
+      ansible.builtin.git:
+        repo: "{{ imagemagick_git_repo }}"
+        dest: "{{ build_root }}/ImageMagick"
+        version: "{{ imagemagick_tag }}"
+        force: true
+      when: do_rebuild
+
+    - name: Configure ImageMagick
+      ansible.builtin.shell: |
+        set -e
+        ./configure --prefix=/usr/local --disable-static
+      args:
+        chdir: "{{ build_root }}/ImageMagick"
+        executable: /bin/bash
+      when: do_rebuild
+
+    - name: Build ImageMagick
+      ansible.builtin.shell: |
+        set -e
+        make -j"$(nproc)"
+      args:
+        chdir: "{{ build_root }}/ImageMagick"
+        executable: /bin/bash
+      when: do_rebuild
+
+    - name: Install ImageMagick
+      ansible.builtin.shell: |
+        set -e
+        make install
+      args:
+        chdir: "{{ build_root }}/ImageMagick"
+        executable: /bin/bash
+      when: do_rebuild
+
+    - name: Ensure /usr/local libs are known to loader
+      ansible.builtin.copy:
+        dest: /etc/ld.so.conf.d/usr-local.conf
+        content: |
+          /usr/local/lib
+          /usr/local/lib64
+        mode: "0644"
+
+    - name: Run ldconfig
+      ansible.builtin.command: ldconfig
+      changed_when: true
+
+    - name: Verify ImageMagick installed
+      ansible.builtin.command: bash -lc "magick -version"
+      register: magick_verify
+      changed_when: false
+
+    - name: Print ImageMagick version
+      ansible.builtin.debug:
+        var: magick_verify.stdout_lines
+

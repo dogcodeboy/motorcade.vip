@@ -1,0 +1,52 @@
+- name: Motorcade - WordPress core install + admin user (WP-CLI)
+  hosts: motorcade
+  become: true
+
+  vars:
+    # Must match your real WP root (your logs showed /var/www/motorcade)
+    wp_root: /var/www/motorcade
+
+    # Web user/group (Amazon Linux nginx default is usually nginx)
+    web_owner: nginx
+    web_group: nginx
+
+  tasks:
+    - name: Ensure wp-cli exists
+      ansible.builtin.command: wp --info
+      register: wpcli_info
+      changed_when: false
+
+    - name: Check if WordPress is already installed
+      ansible.builtin.command: wp core is-installed --path="{{ wp_root }}" --allow-root
+      register: wp_installed
+      failed_when: false
+      changed_when: false
+
+    - name: Run WordPress core install (only if not installed)
+      ansible.builtin.command: >
+        wp core install
+        --path="{{ wp_root }}"
+        --url="{{ wp_site_url }}"
+        --title="{{ wp_site_title }}"
+        --admin_user="{{ wp_admin_user }}"
+        --admin_password="{{ wp_admin_password }}"
+        --admin_email="{{ wp_admin_email }}"
+        --skip-email
+        --allow-root
+      when: wp_installed.rc != 0
+
+    - name: Ensure siteurl/home are set correctly
+      ansible.builtin.command: >
+        wp option update {{ item.key }} "{{ item.val }}"
+        --path="{{ wp_root }}" --allow-root
+      loop:
+        - { key: "siteurl", val: "{{ wp_site_url }}" }
+        - { key: "home",    val: "{{ wp_site_url }}" }
+      changed_when: false
+
+    - name: Fix ownership after WP-CLI actions
+      ansible.builtin.file:
+        path: "{{ wp_root }}"
+        owner: "{{ web_owner }}"
+        group: "{{ web_group }}"
+        recurse: true

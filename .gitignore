@@ -1,0 +1,19 @@
+# Secrets
+.env
+.env.*
+vault_pass.txt
+*.pem
+*.key
+
+# AWS creds
+.aws/
+
+# Ansible
+*.retry
+.ansible/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

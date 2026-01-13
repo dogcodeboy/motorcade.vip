@@ -1,0 +1,105 @@
+---
+- name: "Motorcade - 14a PHP stability baseline (AL2023) - prefer 8.3, fallback 8.2"
+  hosts: motorcade
+  become: true
+
+  vars:
+    preferred_php_minor: "8.3"
+    fallback_php_minor: "8.2"
+
+    # WordPress baseline modules (adjust as needed later)
+    wp_php_modules:
+      - php-cli
+      - php-fpm
+      - php-common
+      - php-mysqlnd
+      - php-gd
+      - php-xml
+      - php-mbstring
+      - php-opcache
+      - php-json
+      - php-curl
+      - php-zip
+      - php-devel
+
+  handlers:
+    - name: restart php-fpm
+      service:
+        name: php-fpm
+        state: restarted
+
+  tasks:
+    - name: Assert Amazon Linux 2023
+      assert:
+        that:
+          - ansible_facts.distribution == "Amazon"
+          - (ansible_facts.distribution_major_version | int) >= 2023
+        fail_msg: "This playbook only supports Amazon Linux 2023"
+
+    - name: Update package metadata
+      dnf:
+        update_cache: true
+
+    - name: Remove any existing PHP packages (prevent mixed ABI)
+      dnf:
+        name: "php*"
+        state: absent
+
+    - name: Clean dnf metadata
+      command: dnf clean all
+
+    - name: Refresh package metadata after removals
+      dnf:
+        update_cache: true
+
+    - name: Detect available PHP minors from repos (best-effort)
+      shell: |
+        set -euo pipefail
+        dnf -q list --showduplicates "php-cli" 2>/dev/null \
+          | awk '{print $2}' \
+          | sed -E 's/^([0-9]+)\.([0-9]+)\..*$/\1.\2/' \
+          | sort -u
+      register: php_minors_available
+      changed_when: false
+      failed_when: false
+
+    - name: Decide desired PHP minor (prefer 8.3 else 8.2)
+      set_fact:
+        desired_php_minor: >-
+          {{
+            (preferred_php_minor in (php_minors_available.stdout_lines | default([])))
+            | ternary(preferred_php_minor, fallback_php_minor)
+          }}
+
+    - name: Show detected PHP minors and chosen target
+      debug:
+        msg:
+          - "Repo-reported PHP minors (best-effort): {{ php_minors_available.stdout_lines | default([]) }}"
+          - "Chosen desired PHP minor: {{ desired_php_minor }} (preferred={{ preferred_php_minor }}, fallback={{ fallback_php_minor }})"
+
+    - name: Install PHP packages (let repos resolve, then we verify & gate)
+      dnf:
+        name: "{{ wp_php_modules }}"
+        state: present
+
+    - name: Enable and start php-fpm
+      service:
+        name: php-fpm
+        state: started
+        enabled: true
+      notify: restart php-fpm
+
+    - name: Verify installed PHP major.minor
+      shell: php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;'
+      register: php_mm
+      changed_when: false
+
+    - name: Fail if installed PHP minor is not the chosen stable minor
+      assert:
+        that:
+          - php_mm.stdout == desired_php_minor
+        fail_msg: >-
+          PHP is {{ php_mm.stdout }} but desired stable minor is {{ desired_php_minor }}.
+          Your enabled AL2023 repos are still resolving PHP to a different minor.
+          Next step: run the repo/stream switch playbook (14a2) to force {{ desired_php_minor }}.
+

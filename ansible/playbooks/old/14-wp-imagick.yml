@@ -1,0 +1,458 @@
+---
+- name: "Motorcade - Playbook 14 - Build ImageMagick + PHP imagick from source (Amazon Linux 2023)"
+  hosts: motorcade
+  become: true
+
+  vars:
+    # ===== Build toggles =====
+    cleanup_build_tools: true          # remove compilers/build deps after success
+    cleanup_build_dir: true            # remove /usr/local/src/motorcade-build after success
+    force_rebuild: false               # set true to rebuild even if already installed
+
+    # ===== Paths =====
+    build_root: "/usr/local/src/motorcade-build"
+
+    # ===== Pinned versions (reproducible) =====
+    # ImageMagick: use official GitHub release tag archive (stable URL shape)
+    imagemagick_tag: "7.1.1-43"
+    imagemagick_url: "https://github.com/ImageMagick/ImageMagick/archive/refs/tags/{{ imagemagick_tag }}.tar.gz"
+
+    # imagick PHP extension: pinned tag from GitHub
+    imagick_tag: "3.7.0"
+    imagick_git_repo: "https://github.com/Imagick/imagick.git"
+
+    # ===== Hardening defaults =====
+    # Disable formats you don't need (optional hardening). Keep common web formats.
+    # Note: Over-restricting can break WP thumbnails. These defaults are safe.
+    policy_harden: true
+    allowed_formats:
+      - JPEG
+      - JPG
+      - PNG
+      - WEBP
+      - GIF
+
+  handlers:
+    - name: Restart php-fpm
+      ansible.builtin.service:
+        name: "{{ php_fpm_service_name }}"
+        state: restarted
+
+    - name: Reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      ignore_errors: true
+
+  tasks:
+    - name: Gather facts
+      ansible.builtin.setup:
+
+    # ----------------------------
+    # OS Guard: Amazon Linux 2023
+    # ----------------------------
+    - name: Fail if not Amazon Linux 2023
+      ansible.builtin.fail:
+        msg: "This playbook is for Amazon Linux 2023. Detected: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      when: not (ansible_distribution == "Amazon" and ansible_distribution_major_version | int == 2023)
+
+    # ----------------------------
+    # Locate PHP tooling paths (authoritative)
+    # ----------------------------
+    - name: Ensure required PHP packages exist (php-cli, php-devel, php-fpm)
+      ansible.builtin.dnf:
+        name:
+          - php-cli
+          - php-devel
+          - php-fpm
+        state: present
+
+    - name: Detect php-config path
+      ansible.builtin.command: "command -v php-config"
+      register: php_config_path
+      changed_when: false
+
+    - name: Detect phpize path
+      ansible.builtin.command: "command -v phpize"
+      register: phpize_path
+      changed_when: false
+
+    - name: Determine PHP extension dir (authoritative via php-config)
+      ansible.builtin.command: "{{ php_config_path.stdout }} --extension-dir"
+      register: php_ext_dir
+      changed_when: false
+
+    - name: Determine PHP ini scan dir (authoritative)
+      ansible.builtin.command: "php --ini"
+      register: php_ini_info
+      changed_when: false
+
+    - name: Parse PHP additional ini scan dir from php --ini output
+      ansible.builtin.set_fact:
+        php_ini_scan_dir: >-
+          {{
+            (php_ini_info.stdout_lines
+              | select('search', 'Scan for additional \\.ini files in:')
+              | list
+              | first
+              | regex_replace('^Scan for additional \\.ini files in:\\s*', '')
+              | trim)
+          }}
+
+    - name: Fail if PHP ini scan dir could not be determined
+      ansible.builtin.fail:
+        msg: "Could not determine PHP ini scan dir from `php --ini` output: {{ php_ini_info.stdout }}"
+      when: php_ini_scan_dir is not defined or php_ini_scan_dir | length == 0 or php_ini_scan_dir == "(none)"
+
+    # ----------------------------
+    # PHP-FPM service name detection (AL2023 is usually 'php-fpm')
+    # ----------------------------
+    - name: Probe php-fpm service name candidates
+      ansible.builtin.set_fact:
+        php_fpm_service_candidates:
+          - "php-fpm"
+          - "php-fpm.service"
+
+    - name: Pick php-fpm service name that exists
+      ansible.builtin.shell: |
+        set -e
+        for s in {{ php_fpm_service_candidates | join(' ') }}; do
+          systemctl status "$s" >/dev/null 2>&1 && echo "$s" && exit 0
+        done
+        # If service isn't loaded yet, default to php-fpm (common on AL2023)
+        echo "php-fpm"
+      args:
+        executable: /bin/bash
+      register: php_fpm_service_pick
+      changed_when: false
+
+    - name: Set php-fpm service name
+      ansible.builtin.set_fact:
+        php_fpm_service_name: "{{ php_fpm_service_pick.stdout | trim }}"
+
+    # ----------------------------
+    # Safety: ensure PHP CLI and PHP-FPM major.minor match (no fragile quoting)
+    # ----------------------------
+    - name: Get PHP CLI major.minor version
+      ansible.builtin.command: php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"
+      register: php_cli_mm
+      changed_when: false
+
+    - name: Get PHP-FPM major.minor version
+      ansible.builtin.shell: |
+        set -e
+        php-fpm -v | head -n1 | sed -E 's/.* ([0-9]+\.[0-9]+)\..*/\1/'
+      args:
+        executable: /bin/bash
+      register: php_fpm_mm
+      changed_when: false
+
+    - name: Fail if php CLI and php-fpm major.minor mismatch
+      ansible.builtin.fail:
+        msg: "Mismatch detected: php-cli={{ php_cli_mm.stdout }} php-fpm={{ php_fpm_mm.stdout }}. Fix PHP packages first."
+      when: php_cli_mm.stdout != php_fpm_mm.stdout
+
+    # ----------------------------
+    # Clean slate option (remove broken imagick artifacts + build dir)
+    # ----------------------------
+    - name: Remove old imagick ini files (if any)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ php_ini_scan_dir }}/50-imagick.ini"
+        - "{{ php_ini_scan_dir }}/20-imagick.ini"
+        - "/etc/php.d/50-imagick.ini"
+        - "/etc/php.d/20-imagick.ini"
+      ignore_errors: true
+
+    - name: Remove old imagick.so from PHP extension dir (if any)
+      ansible.builtin.file:
+        path: "{{ php_ext_dir.stdout }}/imagick.so"
+        state: absent
+      ignore_errors: true
+
+    - name: Remove build directory if force_rebuild enabled
+      ansible.builtin.file:
+        path: "{{ build_root }}"
+        state: absent
+      when: force_rebuild | bool
+
+    - name: Create clean build directory
+      ansible.builtin.file:
+        path: "{{ build_root }}"
+        state: directory
+        mode: "0755"
+
+    # ----------------------------
+    # Install runtime deps (ImageMagick runtime libs depend on what you enable)
+    # AL2023 typically uses these libraries.
+    # ----------------------------
+    - name: Install runtime libraries (dnf)
+      ansible.builtin.dnf:
+        name:
+          - libjpeg-turbo
+          - libpng
+          - libwebp
+          - giflib
+          - libtiff
+          - freetype
+          - zlib
+          - bzip2
+          - libxml2
+          - libzip
+          - openssl
+        state: present
+
+    # ----------------------------
+    # Install build dependencies (temporary)
+    # ----------------------------
+    - name: Install build dependencies (temporary)
+      ansible.builtin.dnf:
+        name:
+          - gcc
+          - gcc-c++
+          - make
+          - autoconf
+          - automake
+          - libtool
+          - pkgconfig
+          - git
+          - tar
+          - gzip
+          - bzip2
+          - xz
+          - wget
+          - curl
+          - openssl-devel
+          - zlib-devel
+          - bzip2-devel
+          - libjpeg-turbo-devel
+          - libpng-devel
+          - libwebp-devel
+          - giflib-devel
+          - libtiff-devel
+          - freetype-devel
+          - libxml2-devel
+          - libzip-devel
+        state: present
+
+    # ----------------------------
+    # Quick check: is ImageMagick already installed?
+    # ----------------------------
+    - name: Check if magick exists
+      ansible.builtin.command: "command -v magick"
+      register: magick_cmd
+      changed_when: false
+      failed_when: false
+
+    - name: Decide whether to build ImageMagick
+      ansible.builtin.set_fact:
+        build_imagemagick: "{{ force_rebuild | bool or (magick_cmd.rc != 0) }}"
+
+    # ----------------------------
+    # Build & install ImageMagick from pinned source (GitHub tag archive)
+    # ----------------------------
+    - name: Download ImageMagick source (pinned)
+      ansible.builtin.get_url:
+        url: "{{ imagemagick_url }}"
+        dest: "{{ build_root }}/ImageMagick-{{ imagemagick_tag }}.tar.gz"
+        mode: "0644"
+      when: build_imagemagick | bool
+
+    - name: Extract ImageMagick
+      ansible.builtin.unarchive:
+        src: "{{ build_root }}/ImageMagick-{{ imagemagick_tag }}.tar.gz"
+        dest: "{{ build_root }}"
+        remote_src: true
+      when: build_imagemagick | bool
+
+    - name: Configure ImageMagick
+      ansible.builtin.command: >
+        ./configure
+        --prefix=/usr/local
+        --disable-static
+        --with-modules
+        --with-jpeg=yes
+        --with-png=yes
+        --with-webp=yes
+        --with-tiff=yes
+        --with-freetype=yes
+        --with-gslib=no
+      args:
+        chdir: "{{ build_root }}/ImageMagick-{{ imagemagick_tag }}"
+      when: build_imagemagick | bool
+
+    - name: Build ImageMagick
+      ansible.builtin.command: make -j "{{ ansible_processor_vcpus | default(2) }}"
+      args:
+        chdir: "{{ build_root }}/ImageMagick-{{ imagemagick_tag }}"
+      when: build_imagemagick | bool
+
+    - name: Install ImageMagick
+      ansible.builtin.command: make install
+      args:
+        chdir: "{{ build_root }}/ImageMagick-{{ imagemagick_tag }}"
+      when: build_imagemagick | bool
+
+    - name: Ensure /usr/local/lib is in ld.so conf
+      ansible.builtin.copy:
+        dest: /etc/ld.so.conf.d/usr-local.conf
+        content: |
+          /usr/local/lib
+          /usr/local/lib64
+        mode: "0644"
+
+    - name: Run ldconfig
+      ansible.builtin.command: ldconfig
+
+    # ----------------------------
+    # Optional hardening: ImageMagick policy.xml (safe baseline)
+    # ----------------------------
+    - name: Find ImageMagick policy.xml location
+      ansible.builtin.shell: |
+        set -e
+        # common paths after source install
+        for p in \
+          /usr/local/etc/ImageMagick-7/policy.xml \
+          /usr/local/etc/ImageMagick/policy.xml \
+          /etc/ImageMagick-7/policy.xml \
+          /etc/ImageMagick/policy.xml
+        do
+          [ -f "$p" ] && echo "$p" && exit 0
+        done
+        echo ""
+      args:
+        executable: /bin/bash
+      register: policy_path
+      changed_when: false
+
+    - name: Apply baseline ImageMagick policy hardening (disable dangerous coders)
+      ansible.builtin.blockinfile:
+        path: "{{ policy_path.stdout | trim }}"
+        marker: "<!-- {mark} MOTORCADE HARDENING -->"
+        insertbefore: "</policymap>"
+        block: |
+          <!-- Baseline hardening: disable risky coders -->
+          <policy domain="coder" rights="none" pattern="PS" />
+          <policy domain="coder" rights="none" pattern="EPS" />
+          <policy domain="coder" rights="none" pattern="PDF" />
+          <policy domain="coder" rights="none" pattern="XPS" />
+          <policy domain="coder" rights="none" pattern="MSL" />
+          <policy domain="coder" rights="none" pattern="MVG" />
+          <policy domain="coder" rights="none" pattern="SVG" />
+      when: policy_harden | bool and (policy_path.stdout | trim | length > 0)
+
+    # ----------------------------
+    # Build imagick PHP extension from pinned tag
+    # ----------------------------
+    - name: Check if imagick already loaded
+      ansible.builtin.command: php -r "echo extension_loaded('imagick') ? 'YES' : 'NO';"
+      register: imagick_loaded
+      changed_when: false
+      failed_when: false
+
+    - name: Decide whether to build imagick extension
+      ansible.builtin.set_fact:
+        build_imagick: "{{ force_rebuild | bool or (imagick_loaded.stdout | trim != 'YES') }}"
+
+    - name: Clone imagick PHP extension (pinned tag)
+      ansible.builtin.git:
+        repo: "{{ imagick_git_repo }}"
+        dest: "{{ build_root }}/imagick"
+        version: "{{ imagick_tag }}"
+        depth: 1
+      when: build_imagick | bool
+
+    - name: phpize imagick
+      ansible.builtin.command: "{{ phpize_path.stdout }}"
+      args:
+        chdir: "{{ build_root }}/imagick"
+      when: build_imagick | bool
+
+    - name: Configure imagick against php-config
+      ansible.builtin.command: "./configure --with-php-config={{ php_config_path.stdout }}"
+      args:
+        chdir: "{{ build_root }}/imagick"
+      when: build_imagick | bool
+
+    - name: Build imagick
+      ansible.builtin.command: make -j "{{ ansible_processor_vcpus | default(2) }}"
+      args:
+        chdir: "{{ build_root }}/imagick"
+      when: build_imagick | bool
+
+    - name: Install imagick
+      ansible.builtin.command: make install
+      args:
+        chdir: "{{ build_root }}/imagick"
+      when: build_imagick | bool
+
+    - name: Ensure imagick ini exists in PHP scan dir
+      ansible.builtin.copy:
+        dest: "{{ php_ini_scan_dir }}/50-imagick.ini"
+        content: |
+          ; Motorcade - enable imagick
+          extension=imagick
+        mode: "0644"
+      notify: Restart php-fpm
+
+    - name: Ensure php-fpm is enabled and started
+      ansible.builtin.service:
+        name: "{{ php_fpm_service_name }}"
+        state: started
+        enabled: true
+
+    - name: Restart php-fpm now (if needed)
+      ansible.builtin.meta: flush_handlers
+
+    # ----------------------------
+    # Verification (must succeed)
+    # ----------------------------
+    - name: Verify imagick loads in PHP
+      ansible.builtin.command: php -m
+      register: php_modules
+      changed_when: false
+
+    - name: Fail if imagick is not present in php -m
+      ansible.builtin.fail:
+        msg: "imagick did not load. php -m output did not include imagick."
+      when: "'imagick' not in (php_modules.stdout | lower)"
+
+    - name: Show ImageMagick version
+      ansible.builtin.command: /usr/local/bin/magick -version
+      register: magick_version
+      changed_when: false
+      failed_when: false
+
+    - name: Debug success summary
+      ansible.builtin.debug:
+        msg:
+          - "OK: imagick is loaded in PHP"
+          - "PHP ext dir: {{ php_ext_dir.stdout }}"
+          - "PHP ini scan dir: {{ php_ini_scan_dir }}"
+          - "ImageMagick: {{ magick_version.stdout_lines[0] | default('magick not found?') }}"
+
+    # ----------------------------
+    # Cleanup (optional)
+    # ----------------------------
+    - name: Remove build directory (optional)
+      ansible.builtin.file:
+        path: "{{ build_root }}"
+        state: absent
+      when: cleanup_build_dir | bool
+
+    - name: Remove build tools (optional)
+      ansible.builtin.dnf:
+        name:
+          - gcc
+          - gcc-c++
+          - make
+          - autoconf
+          - automake
+          - libtool
+          - pkgconfig
+          - git
+        state: absent
+      when: cleanup_build_tools | bool
+

@@ -1,0 +1,130 @@
+---
+- name: Motorcade - generate wp-config.php from Vault
+  hosts: motorcade
+  become: true
+
+  vars:
+    candidate_roots:
+      - /usr/share/nginx/html
+      - /var/www/motorcade
+
+    web_owner: nginx
+    web_group: nginx
+
+    # WordPress DB settings come from group_vars/motorcade/main.yml + vault
+    # wp_db_name: motorcade_wp
+    # wp_db_user: motorcade_user
+    # wp_db_password: "{{ vault_wp_db_password }}"
+    wp_db_host: localhost
+
+  tasks:
+    - name: Detect WordPress root by checking for wp-settings.php
+      ansible.builtin.stat:
+        path: "{{ item }}/wp-settings.php"
+      loop: "{{ candidate_roots }}"
+      register: wp_root_stats
+
+    - name: Set wp_root fact to the first matching root
+      ansible.builtin.set_fact:
+        wp_root: "{{ (wp_root_stats.results | selectattr('stat.exists','equalto',true) | map(attribute='item') | list | first) | default('') }}"
+
+    - name: Fail if WordPress root could not be detected
+      ansible.builtin.fail:
+        msg: "Could not find WordPress in {{ candidate_roots }} (missing wp-settings.php). Run 08-wordpress-install.yml first or confirm web_root."
+      when: wp_root == ""
+
+    - name: Show detected WordPress root
+      ansible.builtin.debug:
+        msg: "Detected WordPress root: {{ wp_root }}"
+
+    - name: Fetch WordPress salts
+      ansible.builtin.uri:
+        url: https://api.wordpress.org/secret-key/1.1/salt/
+        return_content: true
+      register: wp_salts
+
+    - name: Ensure wp-config-sample.php exists
+      ansible.builtin.stat:
+        path: "{{ wp_root }}/wp-config-sample.php"
+      register: wp_sample
+
+    - name: Fail if wp-config-sample.php is missing
+      ansible.builtin.fail:
+        msg: "wp-config-sample.php not found in {{ wp_root }}. WordPress install may be incomplete."
+      when: not wp_sample.stat.exists
+
+    - name: Create wp-config.php from sample if not already present
+      ansible.builtin.copy:
+        src: "{{ wp_root }}/wp-config-sample.php"
+        dest: "{{ wp_root }}/wp-config.php"
+        remote_src: true
+        owner: "{{ web_owner }}"
+        group: "{{ web_group }}"
+        mode: "0640"
+      args:
+        force: false
+
+    - name: Set DB_NAME in wp-config.php
+      ansible.builtin.replace:
+        path: "{{ wp_root }}/wp-config.php"
+        regexp: "define\\(\\s*'DB_NAME'\\s*,\\s*'[^']*'\\s*\\);"
+        replace: "define( 'DB_NAME', '{{ wp_db_name }}' );"
+
+    - name: Set DB_USER in wp-config.php
+      ansible.builtin.replace:
+        path: "{{ wp_root }}/wp-config.php"
+        regexp: "define\\(\\s*'DB_USER'\\s*,\\s*'[^']*'\\s*\\);"
+        replace: "define( 'DB_USER', '{{ wp_db_user }}' );"
+
+    - name: Set DB_PASSWORD in wp-config.php
+      ansible.builtin.replace:
+        path: "{{ wp_root }}/wp-config.php"
+        regexp: "define\\(\\s*'DB_PASSWORD'\\s*,\\s*'[^']*'\\s*\\);"
+        replace: "define( 'DB_PASSWORD', '{{ wp_db_password }}' );"
+
+    - name: Set DB_HOST in wp-config.php
+      ansible.builtin.replace:
+        path: "{{ wp_root }}/wp-config.php"
+        regexp: "define\\(\\s*'DB_HOST'\\s*,\\s*'[^']*'\\s*\\);"
+        replace: "define( 'DB_HOST', '{{ wp_db_host }}' );"
+
+    # Replace the entire salts block with fresh salts.
+    # This targets the common sample markers: AUTH_KEY ... NONCE_SALT.
+    - name: Replace salts block in wp-config.php
+      ansible.builtin.replace:
+        path: "{{ wp_root }}/wp-config.php"
+        regexp: "(?s)define\\(\\s*'AUTH_KEY'.*?define\\(\\s*'NONCE_SALT'\\s*,\\s*'[^']*'\\s*\\);"
+        replace: "{{ wp_salts.content | trim }}"
+
+    - name: Ensure wp-config.php ownership and permissions are correct
+      ansible.builtin.file:
+        path: "{{ wp_root }}/wp-config.php"
+        owner: "{{ web_owner }}"
+        group: "{{ web_group }}"
+        mode: "0640"
+
+    # Remove placeholder index.php ONLY if it contains our message
+    - name: Check current index.php content
+      ansible.builtin.slurp:
+        src: "{{ wp_root }}/index.php"
+      register: index_php
+      ignore_errors: true
+
+    - name: Remove placeholder index.php if it contains 'Motorcade web root is live'
+      ansible.builtin.file:
+        path: "{{ wp_root }}/index.php"
+        state: absent
+      when:
+        - index_php is defined
+        - index_php.content is defined
+        - (index_php.content | b64decode) is search("Motorcade web root is live")
+
+    - name: Ensure WordPress index.php exists after placeholder removal
+      ansible.builtin.stat:
+        path: "{{ wp_root }}/index.php"
+      register: wp_index
+
+   # - name: Fail if WordPress index.php is missing (unexpected)
+    #  ansible.builtin.fail:
+     #   msg: "index.php is missing in {{ wp_root }} after cleanup. WordPress files may be incomplete."
+      #when: not wp_index.stat.exists

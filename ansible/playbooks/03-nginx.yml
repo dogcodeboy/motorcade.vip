@@ -1,0 +1,70 @@
+---
+- name: Motorcade – configure Nginx
+  hosts: motorcade
+  become: true
+
+  vars:
+    web_root: /var/www/motorcade
+    server_names:
+      - motorcade.vip
+      - www.motorcade.vip
+
+  tasks:
+    - name: Ensure nginx is installed
+      ansible.builtin.package:
+        name: nginx
+        state: present
+
+    - name: Ensure nginx is enabled and running
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Create web root
+      ansible.builtin.file:
+        path: "{{ web_root }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0755"
+
+    - name: Install motorcade nginx server block
+      ansible.builtin.copy:
+        dest: /etc/nginx/conf.d/motorcade.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          server {
+              listen 80;
+              server_name {{ server_names | join(' ') }};
+              root {{ web_root }};
+              index index.php index.html;
+
+              location / {
+                  try_files $uri $uri/ /index.php?$args;
+              }
+
+              location ~ \.php$ {
+                  include fastcgi.conf;
+                  fastcgi_pass unix:/run/php-fpm/www.sock;
+              }
+          }
+
+    - name: Disable default nginx config if present (safe)
+      ansible.builtin.command: mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.disabled
+      args:
+        removes: /etc/nginx/conf.d/default.conf
+      notify: reload nginx
+
+    - name: Test nginx configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+  handlers:
+    - name: reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+

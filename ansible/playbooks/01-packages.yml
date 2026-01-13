@@ -1,0 +1,32 @@
+---
+- name: Motorcade – install core packages
+  hosts: motorcade
+  become: true
+
+  vars:
+    packages:
+      - nginx
+      - mariadb105-server
+      - php
+      - php-fpm
+      - php-mysqlnd
+      - php-gd
+      - php-mbstring
+      - php-xml
+      - php-json
+      - unzip
+      - tar
+      - git
+
+  tasks:
+    - name: Ensure system is up to date
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: true
+
+    - name: Install required packages
+      ansible.builtin.dnf:
+        name: "{{ packages }}"
+        state: present
+

@@ -1,0 +1,85 @@
+---
+- name: "Motorcade - 14a PHP baseline for WordPress (AL2023) - accept distro PHP (8.4 on AL2023)"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    # WordPress-friendly module set (add/remove as needed)
+    php_packages:
+      - php
+      - php-cli
+      - php-fpm
+      - php-common
+      - php-devel
+      - php-pear
+      - php-mbstring
+      - php-gd
+      - php-xml
+      - php-opcache
+      - php-mysqlnd
+      - php-json
+      - php-intl
+      - php-zip
+      - php-process
+
+    build_tools:
+      - gcc
+      - gcc-c++
+      - make
+      - autoconf
+      - automake
+      - libtool
+      - pkgconf-pkg-config
+      - git
+      - tar
+      - gzip
+      - bzip2
+      - unzip
+      - patch
+
+  tasks:
+    - name: Assert Amazon Linux 2023
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == "Amazon"
+          - ansible_facts.distribution_major_version | int == 2023
+        fail_msg: "This playbook is for Amazon Linux 2023 only."
+
+    - name: Update package metadata
+      ansible.builtin.dnf:
+        update_cache: true
+
+    - name: Install build tools
+      ansible.builtin.dnf:
+        name: "{{ build_tools }}"
+        state: present
+
+    - name: Install PHP + recommended modules
+      ansible.builtin.dnf:
+        name: "{{ php_packages }}"
+        state: present
+
+    - name: Enable and start php-fpm
+      ansible.builtin.systemd:
+        name: php-fpm
+        enabled: true
+        state: started
+
+    - name: Detect PHP major.minor
+      ansible.builtin.command: bash -lc "php -r 'echo PHP_MAJOR_VERSION.\".\".PHP_MINOR_VERSION;'"
+      register: php_mm
+      changed_when: false
+
+    - name: Show PHP version
+      ansible.builtin.debug:
+        msg: "Detected PHP major.minor: {{ php_mm.stdout }} (AL2023 typically ships 8.4)"
+
+    - name: Assert PHP is 8.4 on AL2023 (expected baseline)
+      ansible.builtin.assert:
+        that:
+          - php_mm.stdout == "8.4"
+        fail_msg: |
+          PHP major.minor is {{ php_mm.stdout }}, expected 8.4 on AL2023.
+          If you intentionally changed repos, stop and align the baseline first.
+

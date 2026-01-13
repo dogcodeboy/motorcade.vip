@@ -1,0 +1,70 @@
+---
+- name: "Motorcade - 14e Cleanup/reset imagick build artifacts (AL2023)"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    build_root: "/usr/local/src/motorcade-build"
+
+  tasks:
+    - name: Assert Amazon Linux 2023
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == "Amazon"
+          - ansible_facts.distribution_major_version | int == 2023
+        fail_msg: "This playbook is for Amazon Linux 2023 only."
+
+    - name: Determine PHP extension dir (best-effort)
+      ansible.builtin.command: bash -lc "php-config --extension-dir"
+      register: php_ext_dir
+      changed_when: false
+      failed_when: false
+
+    - name: Determine PHP ini scan dir (best-effort)
+      ansible.builtin.shell: |
+        set -e
+        php --ini | awk -F': ' '/Scan for additional .ini files in:/{print $2}'
+      args:
+        executable: /bin/bash
+      register: php_ini_scan_dir
+      changed_when: false
+      failed_when: false
+
+    - name: Stop php-fpm (ignore if not installed)
+      ansible.builtin.systemd:
+        name: php-fpm
+        state: stopped
+      failed_when: false
+
+    - name: Remove imagick ini files (if scan dir known)
+      ansible.builtin.file:
+        path: "{{ php_ini_scan_dir.stdout }}/{{ item }}"
+        state: absent
+      loop:
+        - "imagick.ini"
+        - "20-imagick.ini"
+        - "50-imagick.ini"
+      when: php_ini_scan_dir.stdout is defined and (php_ini_scan_dir.stdout | length) > 3 and php_ini_scan_dir.stdout != "(none)"
+
+    - name: Remove imagick.so (if ext dir known)
+      ansible.builtin.file:
+        path: "{{ php_ext_dir.stdout }}/imagick.so"
+        state: absent
+      when: php_ext_dir.stdout is defined and (php_ext_dir.stdout | length) > 3
+
+    - name: Remove build root (optional clean)
+      ansible.builtin.file:
+        path: "{{ build_root }}"
+        state: absent
+
+    - name: Run ldconfig
+      ansible.builtin.command: ldconfig
+      changed_when: true
+
+    - name: Start php-fpm (ignore if not installed)
+      ansible.builtin.systemd:
+        name: php-fpm
+        state: started
+      failed_when: false
+

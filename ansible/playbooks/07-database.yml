@@ -1,0 +1,32 @@
+---
+- name: Motorcade - database provisioning
+  hosts: motorcade
+  become: true
+
+  vars:
+    wp_db_name: motorcade_wp
+    wp_db_user: motorcade_user
+    wp_db_password: "{{ vault_wp_db_password }}"
+
+  tasks:
+    - name: Ensure MariaDB is running
+      ansible.builtin.service:
+        name: mariadb
+        state: started
+        enabled: true
+
+    - name: Create WordPress database
+      community.mysql.mysql_db:
+        name: "{{ wp_db_name }}"
+        state: present
+        login_unix_socket: /var/lib/mysql/mysql.sock
+
+    - name: Create WordPress database user
+      community.mysql.mysql_user:
+        name: "{{ wp_db_user }}"
+        password: "{{ wp_db_password }}"
+        priv: "{{ wp_db_name }}.*:ALL"
+        host: localhost
+        state: present
+        login_unix_socket: /var/lib/mysql/mysql.sock
+

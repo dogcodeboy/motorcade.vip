@@ -1,0 +1,158 @@
+---
+- name: Motorcade - SSL (Let's Encrypt) via webroot (Option B)
+  hosts: motorcade
+  become: true
+
+  vars:
+    domain_primary: motorcade.vip
+    domain_aliases:
+      - www.motorcade.vip
+
+    web_root: /var/www/motorcade
+    acme_root: /var/www/letsencrypt
+
+    nginx_http_conf: /etc/nginx/conf.d/motorcade.conf
+    nginx_ssl_conf: /etc/nginx/conf.d/motorcade-ssl.conf
+
+    # change if you want
+    le_email: patrick@motorcade.vip
+
+  tasks:
+    - name: Install certbot (and helpers)
+      ansible.builtin.package:
+        name:
+          - certbot
+          - python3-certbot-nginx
+        state: present
+
+    - name: Ensure nginx is enabled and running
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Create ACME webroot directory
+      ansible.builtin.file:
+        path: "{{ acme_root }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0755"
+
+    # --- HTTP vhost: serve WordPress + ACME challenge ---
+    - name: Install HTTP vhost with ACME challenge location
+      ansible.builtin.copy:
+        dest: "{{ nginx_http_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          server {
+              listen 80;
+              server_name {{ domain_primary }}{% for d in domain_aliases %} {{ d }}{% endfor %};
+
+              # ACME challenge (Let's Encrypt)
+              location ^~ /.well-known/acme-challenge/ {
+                  root {{ acme_root }};
+                  default_type "text/plain";
+                  try_files $uri =404;
+              }
+
+              root {{ web_root }};
+              index index.php index.html;
+
+              location / {
+                  try_files $uri $uri/ /index.php?$args;
+              }
+
+              location ~ \.php$ {
+                  include fastcgi_params;
+                  fastcgi_pass unix:/run/php-fpm/www.sock;
+                  fastcgi_index index.php;
+                  fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              }
+          }
+
+    - name: Test nginx configuration (pre-cert)
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Reload nginx (pre-cert)
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
+    # --- Obtain certificate (webroot) ---
+    - name: Obtain/renew Let's Encrypt cert (webroot, non-interactive)
+      ansible.builtin.command: >
+        certbot certonly --webroot
+        -w {{ acme_root }}
+        -d {{ domain_primary }}
+        {% for d in domain_aliases %}-d {{ d }} {% endfor %}
+        --agree-tos --non-interactive
+        -m {{ le_email }}
+      register: certbot_out
+      changed_when: "'Congratulations' in certbot_out.stdout or 'successfully' in certbot_out.stdout|lower"
+      failed_when: certbot_out.rc != 0
+
+    # --- HTTPS vhost: dedicated 443 block + redirect ---
+    - name: Install HTTPS vhost (443) using issued cert
+      ansible.builtin.copy:
+        dest: "{{ nginx_ssl_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          server {
+              listen 443 ssl http2;
+              server_name {{ domain_primary }}{% for d in domain_aliases %} {{ d }}{% endfor %};
+
+              ssl_certificate     /etc/letsencrypt/live/{{ domain_primary }}/fullchain.pem;
+              ssl_certificate_key /etc/letsencrypt/live/{{ domain_primary }}/privkey.pem;
+
+              # recommended baseline
+              ssl_session_cache shared:SSL:10m;
+              ssl_session_timeout 10m;
+              ssl_protocols TLSv1.2 TLSv1.3;
+
+              root {{ web_root }};
+              index index.php index.html;
+
+              location / {
+                  try_files $uri $uri/ /index.php?$args;
+              }
+
+              location ~ \.php$ {
+                  include fastcgi_params;
+                  fastcgi_pass unix:/run/php-fpm/www.sock;
+                  fastcgi_index index.php;
+                  fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              }
+          }
+
+          # redirect HTTP -> HTTPS
+          server {
+              listen 80;
+              server_name {{ domain_primary }}{% for d in domain_aliases %} {{ d }}{% endfor %};
+              return 301 https://$host$request_uri;
+          }
+
+    - name: Test nginx configuration (post-cert)
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Reload nginx (post-cert)
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
+    # --- quick visibility checks ---
+    - name: Show listening ports (80/443)
+      ansible.builtin.shell: ss -lntp | egrep ':(80|443)\b' || true
+      register: listen_ports
+      changed_when: false
+
+    - name: Print listening ports
+      ansible.builtin.debug:
+        var: listen_ports.stdout_lines
+

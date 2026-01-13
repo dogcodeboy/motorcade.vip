@@ -1,0 +1,91 @@
+---
+- name: Motorcade - install WordPress files
+  hosts: motorcade
+  become: true
+
+  vars:
+    web_root: /var/www/motorcade
+    wp_version: latest
+    wp_tmp_dir: /tmp/wordpress-install
+
+    web_owner: nginx
+    web_group: nginx
+
+  tasks:
+    - name: Ensure web root exists
+      ansible.builtin.file:
+        path: "{{ web_root }}"
+        state: directory
+        owner: "{{ web_owner }}"
+        group: "{{ web_group }}"
+        mode: "0755"
+
+    - name: Ensure temp directory exists
+      ansible.builtin.file:
+        path: "{{ wp_tmp_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Download WordPress tarball
+      ansible.builtin.get_url:
+        url: "https://wordpress.org/{{ 'latest' if wp_version == 'latest' else ('wordpress-' ~ wp_version) }}.tar.gz"
+        dest: "{{ wp_tmp_dir }}/wordpress.tar.gz"
+        mode: "0644"
+
+    - name: Extract WordPress tarball
+      ansible.builtin.unarchive:
+        src: "{{ wp_tmp_dir }}/wordpress.tar.gz"
+        dest: "{{ wp_tmp_dir }}"
+        remote_src: true
+
+    # This prevents nuking your webroot if you already created files
+    - name: Check if WordPress already present
+      ansible.builtin.stat:
+        path: "{{ web_root }}/wp-settings.php"
+      register: wp_present
+
+    - name: Copy WordPress into web root (first install only)
+      ansible.builtin.command: >
+        rsync -a "{{ wp_tmp_dir }}/wordpress/" "{{ web_root }}/"
+      args:
+        creates: "{{ web_root }}/wp-settings.php"
+      when: not wp_present.stat.exists
+
+    - name: Ensure correct ownership for WordPress tree
+      ansible.builtin.file:
+        path: "{{ web_root }}"
+        state: directory
+        owner: "{{ web_owner }}"
+        group: "{{ web_group }}"
+        recurse: true
+
+    - name: Set safe directory permissions (0755)
+      ansible.builtin.command: >
+        find "{{ web_root }}" -type d -exec chmod 0755 {} \;
+      changed_when: false
+
+    - name: Set safe file permissions (0644)
+      ansible.builtin.command: >
+        find "{{ web_root }}" -type f -exec chmod 0644 {} \;
+      changed_when: false
+
+    # If your nginx config is pointing at /var/www/motorcade but no index exists,
+    # nginx can show 403. WordPress provides index.php, but this is a safety net.
+    - name: Ensure index.php exists (safety net)
+      ansible.builtin.copy:
+        dest: "{{ web_root }}/index.php"
+        owner: "{{ web_owner }}"
+        group: "{{ web_group }}"
+        mode: "0644"
+        content: |
+          <?php
+          // Safety net file. If WordPress is present, it will overwrite this naturally.
+          echo "Motorcade web root is live.";
+          ?>
+      when: not wp_present.stat.exists
+
+    - name: Clean up temp directory
+      ansible.builtin.file:
+        path: "{{ wp_tmp_dir }}"
+        state: absent
+

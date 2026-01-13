@@ -1,0 +1,16 @@
+---
+- name: Motorcade - database dependencies
+  hosts: motorcade
+  become: true
+
+  tasks:
+    - name: Ensure python3-pip is installed
+      ansible.builtin.package:
+        name: python3-pip
+        state: present
+
+    - name: Install PyMySQL via pip (Amazon Linux 2023)
+      ansible.builtin.pip:
+        name: pymysql
+        executable: pip3
+

@@ -1,0 +1,78 @@
+---
+- name: "Motorcade - 14b Preflight (AL2023) for ImageMagick + PHP imagick"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Assert Amazon Linux 2023
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == "Amazon"
+          - ansible_facts.distribution_major_version | int == 2023
+        fail_msg: "This playbook is for Amazon Linux 2023 only."
+
+    - name: Detect php binary
+      ansible.builtin.command: bash -lc "command -v php"
+      register: php_bin
+      changed_when: false
+
+    - name: Detect php-config binary
+      ansible.builtin.command: bash -lc "command -v php-config"
+      register: php_config_bin
+      changed_when: false
+
+    - name: Detect phpize binary
+      ansible.builtin.command: bash -lc "command -v phpize"
+      register: phpize_bin
+      changed_when: false
+
+    - name: Determine PHP extension dir (authoritative)
+      ansible.builtin.command: bash -lc "php-config --extension-dir"
+      register: php_ext_dir
+      changed_when: false
+
+    - name: Determine PHP additional ini scan dir (authoritative)
+      ansible.builtin.shell: |
+        set -e
+        php --ini | awk -F': ' '/Scan for additional .ini files in:/{print $2}'
+      args:
+        executable: /bin/bash
+      register: php_ini_scan_dir
+      changed_when: false
+
+    - name: Determine PHP major.minor from CLI
+      ansible.builtin.command: bash -lc "php -r 'echo PHP_MAJOR_VERSION.\".\".PHP_MINOR_VERSION;'"
+      register: php_mm
+      changed_when: false
+
+    - name: Show detected PHP paths and dirs
+      ansible.builtin.debug:
+        msg:
+          - "php: {{ php_bin.stdout }}"
+          - "php-config: {{ php_config_bin.stdout }}"
+          - "phpize: {{ phpize_bin.stdout }}"
+          - "PHP ext dir: {{ php_ext_dir.stdout }}"
+          - "PHP ini scan dir: {{ php_ini_scan_dir.stdout }}"
+          - "PHP CLI major.minor: {{ php_mm.stdout }}"
+
+    - name: Fail if ini scan dir is empty/none
+      ansible.builtin.assert:
+        that:
+          - php_ini_scan_dir.stdout is defined
+          - php_ini_scan_dir.stdout | length > 3
+          - php_ini_scan_dir.stdout != "(none)"
+        fail_msg: "PHP additional ini scan dir could not be determined."
+
+    - name: Ensure ini scan dir exists
+      ansible.builtin.file:
+        path: "{{ php_ini_scan_dir.stdout }}"
+        state: directory
+        mode: "0755"
+
+    - name: Assert PHP is 8.4 (baseline)
+      ansible.builtin.assert:
+        that:
+          - php_mm.stdout == "8.4"
+        fail_msg: "PHP is {{ php_mm.stdout }} but this stack expects 8.4 on AL2023."
+
