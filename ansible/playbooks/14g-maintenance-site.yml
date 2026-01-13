@@ -1,0 +1,20 @@
+---
+- name: Motorcade | 14g | Maintenance 503 + Trust theme activation
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    motorcade_maintenance_enabled: true
+    motorcade_maintenance_allow_ips: []
+
+    motorcade_web_root: "/var/www/html"
+    motorcade_maintenance_root: "/var/www/motorcade/maintenance"
+    motorcade_nginx_conf_dir: "/etc/nginx/conf.d"
+
+    motorcade_wp_path: "/var/www/motorcade"
+    motorcade_wp_cli: "/usr/local/bin/wp"
+
+    motorcade_trust_theme_zip_local: "/opt/motorcade/artifacts/motorcade-trust-theme.zip"
+
+  roles:
+    - role: motorcade_maintenance

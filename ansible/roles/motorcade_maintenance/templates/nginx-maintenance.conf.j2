@@ -1,0 +1,21 @@
+# Motorcade maintenance mode (503)
+error_page 503 @motorcade_maintenance;
+
+location @motorcade_maintenance {
+  root {{ motorcade_maintenance_root }};
+  rewrite ^ /index.html break;
+}
+
+map $remote_addr $mc_allow_bypass {
+  default 0;
+{% for ip in motorcade_maintenance_allow_ips %}
+  {{ ip }} 1;
+{% endfor %}
+}
+
+location / {
+  if ($mc_allow_bypass = 0) { return 503; }
+}
+
+location = /wp-login.php { }
+location /wp-admin/ { }

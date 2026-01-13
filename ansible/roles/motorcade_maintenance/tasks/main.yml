@@ -1,0 +1,71 @@
+---
+- name: Ensure maintenance directory exists
+  ansible.builtin.file:
+    path: "{{ motorcade_maintenance_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy maintenance index.html
+  ansible.builtin.template:
+    src: maintenance.html.j2
+    dest: "{{ motorcade_maintenance_root }}/index.html"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy nginx maintenance config (503)
+  ansible.builtin.template:
+    src: nginx-maintenance.conf.j2
+    dest: "{{ motorcade_nginx_conf_dir }}/motorcade-maintenance.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+  when: motorcade_maintenance_enabled | bool
+
+- name: Remove nginx maintenance config if disabled
+  ansible.builtin.file:
+    path: "{{ motorcade_nginx_conf_dir }}/motorcade-maintenance.conf"
+    state: absent
+  notify: Reload nginx
+  when: not (motorcade_maintenance_enabled | bool)
+
+- name: Check theme zip exists on controller
+  ansible.builtin.stat:
+    path: "{{ motorcade_trust_theme_zip_local }}"
+  delegate_to: localhost
+  run_once: true
+  register: trust_zip
+
+- name: Fail if theme zip missing on controller
+  ansible.builtin.fail:
+    msg: "Trust theme zip not found on controller at {{ motorcade_trust_theme_zip_local }}."
+  when: not trust_zip.stat.exists
+
+- name: Copy trust theme zip to server
+  ansible.builtin.copy:
+    src: "{{ motorcade_trust_theme_zip_local }}"
+    dest: "/tmp/motorcade-trust-theme.zip"
+    mode: "0644"
+
+- name: Verify wp-cli exists
+  ansible.builtin.stat:
+    path: "{{ motorcade_wp_cli }}"
+  register: wpcli
+
+- name: Fail if wp-cli missing
+  ansible.builtin.fail:
+    msg: "wp-cli not found at {{ motorcade_wp_cli }}."
+  when: not wpcli.stat.exists
+
+- name: Install + activate Trust theme
+  command: >
+    {{ motorcade_wp_cli }} theme install /tmp/motorcade-trust-theme.zip
+    --activate
+    --force
+    --path={{ motorcade_wp_path }}
+    --allow-root
+  become: true
+
