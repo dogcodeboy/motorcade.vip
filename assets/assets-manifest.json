@@ -1,0 +1,172 @@
+{
+  "project": "motorcade.vip",
+  "manifest_version": "1.0.0",
+  "phase": 1,
+  "scope": "public_website_and_baseline_ui_only",
+  "canonical_asset_root": "motorcade-assets",
+  "rules_ref": [
+    "docs/assets/PHASE-1-ASSET-SPEC.md",
+    "docs/checkpoints/2026-01-12/02-BRAND-CONSTRAINTS.md",
+    "docs/checkpoints/2026-01-12/09-DECISION-PSYCHOLOGY.md"
+  ],
+  "exclusions": [
+    "no_human_faces",
+    "no_guards_or_uniforms",
+    "no_weapons_or_tactical_imagery",
+    "no_stock_photo_look",
+    "no_cinematic_action_styling",
+    "no_ops_portal_visuals",
+    "no_employee_portal_visuals"
+  ],
+  "output_formats": {
+    "icons": ["svg", "png"],
+    "badges": ["svg", "png"],
+    "backgrounds": ["webp", "jpg"],
+    "dividers": ["svg"],
+    "textures": ["png"]
+  },
+  "responsive_widths_px": [2560, 1440, 1024, 768],
+  "assets": {
+    "backgrounds": {
+      "hero": {
+        "id": "bg.hero.primary",
+        "intent": "calm_authority_first_impression",
+        "path_templates": [
+          "ui/backgrounds/hero/hero-{w}.webp",
+          "ui/backgrounds/hero/hero-{w}.jpg"
+        ],
+        "required_widths_px": [2560, 1440, 1024, 768]
+      },
+      "sections": [
+        {
+          "id": "bg.section.services",
+          "intent": "structure_without_distraction",
+          "path_templates": [
+            "ui/backgrounds/sections/services-{w}.webp",
+            "ui/backgrounds/sections/services-{w}.jpg"
+          ],
+          "required_widths_px": [2560, 1440, 1024, 768]
+        },
+        {
+          "id": "bg.section.trust",
+          "intent": "verification_and_legitimacy",
+          "path_templates": [
+            "ui/backgrounds/sections/trust-{w}.webp",
+            "ui/backgrounds/sections/trust-{w}.jpg"
+          ],
+          "required_widths_px": [2560, 1440, 1024, 768]
+        },
+        {
+          "id": "bg.section.cta",
+          "intent": "calm_call_to_action",
+          "path_templates": [
+            "ui/backgrounds/sections/cta-{w}.webp",
+            "ui/backgrounds/sections/cta-{w}.jpg"
+          ],
+          "required_widths_px": [2560, 1440, 1024, 768]
+        },
+        {
+          "id": "bg.section.footer",
+          "intent": "quiet_finish",
+          "path_templates": [
+            "ui/backgrounds/sections/footer-{w}.webp",
+            "ui/backgrounds/sections/footer-{w}.jpg"
+          ],
+          "required_widths_px": [2560, 1440, 1024, 768]
+        }
+      ],
+      "auth_shell": {
+        "id": "bg.auth.shell",
+        "intent": "neutral_enterprise_shell_no_role_specifics",
+        "path_templates": [
+          "ui/backgrounds/auth/auth-{w}.webp",
+          "ui/backgrounds/auth/auth-{w}.jpg"
+        ],
+        "required_widths_px": [2560, 1440, 1024, 768]
+      }
+    },
+    "icons": [
+      {
+        "id": "icon.shield",
+        "intent": "protection",
+        "paths": ["ui/icons/shield.svg", "ui/icons/shield.png"]
+      },
+      {
+        "id": "icon.check",
+        "intent": "verification",
+        "paths": ["ui/icons/check.svg", "ui/icons/check.png"]
+      },
+      {
+        "id": "icon.map",
+        "intent": "location",
+        "paths": ["ui/icons/map.svg", "ui/icons/map.png"]
+      },
+      {
+        "id": "icon.clock",
+        "intent": "time",
+        "paths": ["ui/icons/clock.svg", "ui/icons/clock.png"]
+      },
+      {
+        "id": "icon.user",
+        "intent": "identity_generic",
+        "paths": ["ui/icons/user.svg", "ui/icons/user.png"]
+      },
+      {
+        "id": "icon.settings",
+        "intent": "system_settings",
+        "paths": ["ui/icons/settings.svg", "ui/icons/settings.png"]
+      },
+      {
+        "id": "icon.alert",
+        "intent": "attention_without_alarmism",
+        "paths": ["ui/icons/alert.svg", "ui/icons/alert.png"]
+      }
+    ],
+    "badges": [
+      {
+        "id": "badge.licensed",
+        "intent": "legitimacy",
+        "paths": ["ui/badges/licensed.svg", "ui/badges/licensed.png"]
+      },
+      {
+        "id": "badge.insured",
+        "intent": "risk_management",
+        "paths": ["ui/badges/insured.svg", "ui/badges/insured.png"]
+      },
+      {
+        "id": "badge.background_checked",
+        "intent": "screening",
+        "paths": ["ui/badges/background-checked.svg", "ui/badges/background-checked.png"]
+      },
+      {
+        "id": "badge.dispatch_24_7",
+        "intent": "availability",
+        "paths": ["ui/badges/dispatch-24-7.svg", "ui/badges/dispatch-24-7.png"]
+      },
+      {
+        "id": "badge.vetted",
+        "intent": "quality_control",
+        "paths": ["ui/badges/vetted.svg", "ui/badges/vetted.png"]
+      }
+    ],
+    "dividers": [
+      {
+        "id": "divider.light",
+        "intent": "structure_soft_contrast",
+        "paths": ["ui/dividers/divider-light.svg"]
+      },
+      {
+        "id": "divider.dark",
+        "intent": "structure_soft_contrast",
+        "paths": ["ui/dividers/divider-dark.svg"]
+      }
+    ],
+    "textures": [
+      {
+        "id": "texture.noise.subtle",
+        "intent": "depth_without_distraction",
+        "paths": ["ui/textures/noise-subtle.png"]
+      }
+    ]
+  }
+}
