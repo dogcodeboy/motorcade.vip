@@ -1,0 +1,95 @@
+---
+- name: "Playbook 23 — Micro Polish (SAFE menu normalization + Theme refresh)"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_path: /var/www/motorcade
+    wp_cli: /usr/local/bin/wp
+
+    # IMPORTANT: This is the actual WP menu NAME (per wp-admin screenshot)
+    primary_menu_name: primary
+
+    menu_items:
+      - { label: "Home", url: "/" }
+      - { label: "Services", url: "/services/" }
+      - { label: "Executive Protection", url: "/executive-protection/" }
+      - { label: "About", url: "/about/" }
+      - { label: "Contact", url: "/contact/" }
+
+  tasks:
+    - name: Verify wp-cli is available
+      ansible.builtin.stat:
+        path: "{{ wp_cli }}"
+      register: wpcli
+
+    - name: Fail if wp-cli is missing
+      ansible.builtin.fail:
+        msg: "wp-cli not found at {{ wp_cli }}"
+      when: not wpcli.stat.exists
+
+    - name: Lookup existing menu ID by name (REQUIRED)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        "{{ wp_cli }}" menu list --format=csv --fields=term_id,name           --path="{{ wp_path }}" --allow-root         | awk -F, 'NR>1 && $2=="{{ primary_menu_name }}" {print $1}' | tail -n 1
+      args:
+        executable: /bin/bash
+      register: menu_id
+      changed_when: false
+
+    - name: Fail if menu does not exist
+      ansible.builtin.fail:
+        msg: >
+          Menu named '{{ primary_menu_name }}' not found.
+          Verify in WP Admin → Appearance → Menus, or run:
+          wp menu list --path={{ wp_path }} --allow-root
+      when: (menu_id.stdout | trim) == ""
+
+    - name: Remove all existing menu items (safe)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        IDS=$("{{ wp_cli }}" menu item list "{{ menu_id.stdout | trim }}"           --format=ids --path="{{ wp_path }}" --allow-root || true)
+        if [ -n "$IDS" ]; then
+          for id in $IDS; do
+            "{{ wp_cli }}" menu item delete "$id"               --path="{{ wp_path }}" --allow-root >/dev/null || true
+          done
+          echo "cleared"
+        else
+          echo "empty"
+        fi
+      args:
+        executable: /bin/bash
+      register: cleared
+      changed_when: "'cleared' in (cleared.stdout | default(''))"
+
+    - name: Add normalized menu items
+      ansible.builtin.shell: |
+        set -euo pipefail
+        "{{ wp_cli }}" menu item add-custom "{{ menu_id.stdout | trim }}"           "{{ item.label }}" "{{ item.url }}"           --path="{{ wp_path }}" --allow-root >/dev/null
+        echo "added:{{ item.label }}"
+      args:
+        executable: /bin/bash
+      loop: "{{ menu_items }}"
+      loop_control:
+        label: "{{ item.label }}"
+      register: adds
+      changed_when: true
+
+    - name: Assign menu to theme primary location
+      ansible.builtin.shell: |
+        set -euo pipefail
+        "{{ wp_cli }}" menu location assign "{{ menu_id.stdout | trim }}" primary           --path="{{ wp_path }}" --allow-root >/dev/null || true
+        echo "assigned:primary"
+      args:
+        executable: /bin/bash
+      register: assigned
+      changed_when: "'assigned:' in (assigned.stdout | default(''))"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Menu name: {{ primary_menu_name }}"
+          - "Menu ID: {{ menu_id.stdout | trim }}"
+          - "Cleared: {{ cleared.stdout | default('') }}"
+          - "Assigned: {{ assigned.stdout | default('') }}"
+          - "Items: {{ menu_items | map(attribute='label') | list }}"
