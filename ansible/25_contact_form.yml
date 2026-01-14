@@ -1,0 +1,8 @@
+---
+- name: Deploy Motorcade contact form
+  hosts: web
+  become: true
+  tasks:
+    - name: Ensure contact page exists
+      debug:
+        msg: "Contact form deployment placeholder (WP integration handled via content injector)"

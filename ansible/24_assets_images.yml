@@ -1,0 +1,20 @@
+---
+- name: Deploy Motorcade image assets
+  hosts: web
+  become: true
+  tasks:
+    - name: Ensure motorcade image directory exists
+      file:
+        path: /var/www/motorcade/wp-content/uploads/motorcade/images
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+
+    - name: Copy image assets
+      copy:
+        src: assets/images/motorcade/
+        dest: /var/www/motorcade/wp-content/uploads/motorcade/images/
+        owner: apache
+        group: apache
+        mode: '0644'
