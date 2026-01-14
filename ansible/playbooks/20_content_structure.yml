@@ -1,0 +1,216 @@
+---
+- name: "Playbook 20 — Content & Structure (Pages + Menu + Front Page)"
+  hosts: motorcade
+  become: true
+  gather_facts: false
+
+  vars:
+    wp_path: "/var/www/motorcade"
+    wp_cli: "wp"
+    wp_allow_root: true
+
+    # If true, overwrite page content on every run. If false, only create missing pages.
+    # You can still manually edit pages in WP Admin without this playbook undoing it.
+    force_content: false
+
+    # Pages to manage (slug is the stable identity)
+    motorcade_pages:
+      - { slug: "home", title: "Motorcade Security Solutions", src: "home.md", set_front_page: true, menu: true, menu_label: "Home", menu_order: 10 }
+      - { slug: "services", title: "Services", src: "services.md", menu: true, menu_label: "Services", menu_order: 20 }
+      - { slug: "executive-protection", title: "Executive Protection", src: "executive_protection.md", menu: true, menu_label: "Executive Protection", menu_order: 30 }
+      - { slug: "about", title: "About", src: "about.md", menu: true, menu_label: "About", menu_order: 40 }
+      - { slug: "contact", title: "Contact", src: "contact.md", menu: true, menu_label: "Contact", menu_order: 50 }
+      # Not in top nav yet, but created for CTAs / future flows
+      - { slug: "security-assessment", title: "Request a Security Assessment", src: "security_assessment.md", menu: false }
+
+    # Primary menu name (safe, idempotent)
+    wp_primary_menu_name: "primary"
+
+  pre_tasks:
+    - name: "Verify WordPress path exists"
+      ansible.builtin.stat:
+        path: "{{ wp_path }}/wp-config.php"
+      register: wp_config
+      failed_when: not wp_config.stat.exists
+
+    - name: "Verify wp-cli is available"
+      ansible.builtin.command: "{{ wp_cli }} --info"
+      register: wpcli_info
+      changed_when: false
+
+  tasks:
+    - name: "Ensure content staging directory exists"
+      ansible.builtin.file:
+        path: "/tmp/motorcade-content"
+        state: directory
+        mode: "0755"
+
+    - name: "Upload markdown content files"
+      ansible.builtin.copy:
+        src: "wp/content/{{ item.src }}"
+        dest: "/tmp/motorcade-content/{{ item.src }}"
+        mode: "0644"
+      loop: "{{ motorcade_pages }}"
+      loop_control:
+        label: "{{ item.src }}"
+
+    - name: "Resolve existing page IDs by slug"
+      ansible.builtin.command: >
+        {{ wp_cli }}
+        post list
+        --post_type=page
+        --name="{{ item.slug }}"
+        --field=ID
+        --format=ids
+        --path="{{ wp_path }}"
+        {% if wp_allow_root %}--allow-root{% endif %}
+      register: page_ids
+      changed_when: false
+      loop: "{{ motorcade_pages }}"
+      loop_control:
+        label: "{{ item.slug }}"
+
+    - name: "Build slug -> page_id map"
+      ansible.builtin.set_fact:
+        motorcade_page_id_map: "{{ motorcade_page_id_map | default({}) | combine({ item.item.slug: (item.stdout | trim) }) }}"
+      loop: "{{ page_ids.results }}"
+
+    - name: "Create missing pages (by slug)"
+      ansible.builtin.command: >
+        {{ wp_cli }}
+        post create
+        /tmp/motorcade-content/{{ item.src }}
+        --post_type=page
+        --post_status=publish
+        --post_title="{{ item.title }}"
+        --post_name="{{ item.slug }}"
+        --path="{{ wp_path }}"
+        {% if wp_allow_root %}--allow-root{% endif %}
+      register: created_pages
+      changed_when: true
+      when: (motorcade_page_id_map[item.slug] | default('') | length) == 0
+      loop: "{{ motorcade_pages }}"
+      loop_control:
+        label: "{{ item.slug }}"
+
+    - name: "Refresh page IDs after creates"
+      ansible.builtin.command: >
+        {{ wp_cli }}
+        post list
+        --post_type=page
+        --name="{{ item.slug }}"
+        --field=ID
+        --format=ids
+        --path="{{ wp_path }}"
+        {% if wp_allow_root %}--allow-root{% endif %}
+      register: page_ids_refresh
+      changed_when: false
+      loop: "{{ motorcade_pages }}"
+      loop_control:
+        label: "{{ item.slug }}"
+
+    - name: "Update slug -> page_id map (final)"
+      ansible.builtin.set_fact:
+        motorcade_page_id_map: "{{ motorcade_page_id_map | default({}) | combine({ item.item.slug: (item.stdout | trim) }) }}"
+      loop: "{{ page_ids_refresh.results }}"
+
+    - name: "Update page content (only if force_content=true)"
+      ansible.builtin.command: >
+        {{ wp_cli }}
+        post update
+        {{ motorcade_page_id_map[item.slug] }}
+        --post_content="$(cat /tmp/motorcade-content/{{ item.src }})"
+        --path="{{ wp_path }}"
+        {% if wp_allow_root %}--allow-root{% endif %}
+      register: updated_pages
+      changed_when: true
+      when:
+        - force_content | bool
+        - (motorcade_page_id_map[item.slug] | default('') | length) > 0
+      loop: "{{ motorcade_pages }}"
+      loop_control:
+        label: "{{ item.slug }}"
+
+    - name: "Ensure primary menu exists"
+      ansible.builtin.command: >
+        {{ wp_cli }}
+        menu create "{{ wp_primary_menu_name }}"
+        --path="{{ wp_path }}"
+        {% if wp_allow_root %}--allow-root{% endif %}
+      register: menu_create
+      changed_when: "'Created menu' in (menu_create.stdout | default(''))"
+      failed_when: false
+
+    - name: "Add menu items for top-nav pages (idempotent)"
+      ansible.builtin.command: >
+        {{ wp_cli }}
+        menu item add-post "{{ wp_primary_menu_name }}"
+        {{ motorcade_page_id_map[item.slug] }}
+        --title="{{ item.menu_label }}"
+        --path="{{ wp_path }}"
+        {% if wp_allow_root %}--allow-root{% endif %}
+      register: menu_add
+      changed_when: "'Added' in (menu_add.stdout | default(''))"
+      failed_when: false
+      when:
+        - item.menu | bool
+        - (motorcade_page_id_map[item.slug] | default('') | length) > 0
+      loop: "{{ motorcade_pages | selectattr('menu','defined') | list }}"
+      loop_control:
+        label: "{{ item.slug }}"
+
+    - name: "Try to assign menu to theme location (primary if present, else first location)"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        LOCS="$({{ wp_cli }} menu location list --fields=location --format=csv --path='{{ wp_path }}' {% if wp_allow_root %}--allow-root{% endif %} | tail -n +2 || true)"
+        if echo "$LOCS" | grep -qx "primary"; then
+          TARGET="primary"
+        else
+          TARGET="$(echo "$LOCS" | head -n 1 | tr -d '\r\n' || true)"
+        fi
+        if [ -n "${TARGET:-}" ]; then
+          {{ wp_cli }} menu location assign "{{ wp_primary_menu_name }}" "$TARGET" --path='{{ wp_path }}' {% if wp_allow_root %}--allow-root{% endif %}
+          echo "assigned:$TARGET"
+        else
+          echo "no-locations"
+        fi
+      args:
+        executable: /bin/bash
+      register: menu_assign
+      changed_when: "'assigned:' in (menu_assign.stdout | default(''))"
+      failed_when: false
+
+    - name: "Set static front page to Home"
+      ansible.builtin.command: >
+        {{ wp_cli }}
+        option update show_on_front page
+        --path="{{ wp_path }}"
+        {% if wp_allow_root %}--allow-root{% endif %}
+      register: front_setting
+      changed_when: false
+
+    - name: "Set page_on_front to Home page ID"
+      ansible.builtin.command: >
+        {{ wp_cli }}
+        option update page_on_front {{ motorcade_page_id_map['home'] }}
+        --path="{{ wp_path }}"
+        {% if wp_allow_root %}--allow-root{% endif %}
+      register: front_page
+      changed_when: false
+      when: (motorcade_page_id_map['home'] | default('') | length) > 0
+
+    - name: "Set page_for_posts to 0 (no blog index yet)"
+      ansible.builtin.command: >
+        {{ wp_cli }}
+        option update page_for_posts 0
+        --path="{{ wp_path }}"
+        {% if wp_allow_root %}--allow-root{% endif %}
+      register: posts_page
+      changed_when: false
+
+    - name: "Summary"
+      ansible.builtin.debug:
+        msg:
+          - "Pages ensured: {{ motorcade_page_id_map }}"
+          - "Menu assignment result: {{ menu_assign.stdout | default('') }}"
+          - "force_content={{ force_content }}"
