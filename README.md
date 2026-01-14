@@ -1,30 +1,23 @@
-# motorcade.vip
-Website + hosting repo for Motorcade (AWS / Amazon Linux 2023)
+# Motorcade.vip Infrastructure & Website Repo
 
-## ✅ Start Here (Canonical State)
-Authoritative project state is preserved in dated checkpoints.
+This repository contains the Ansible-driven infrastructure, WordPress deployment, and operational runbooks for **Motorcade Security Solutions**.
 
-- **Latest checkpoint:** `docs/checkpoints/2026-01-12/`
+## Latest checkpoint
 
-If chat history conflicts with checkpoint docs, the checkpoint docs win.
+- **2026-01-14** — Session handoff + fixes (WP filesystem/perms, theme/footer license line, assets deploy notes)  
+  → `docs/checkpoints/2026-01-14/README.md`
 
----
+## Checkpoints
 
-## 🛠 Maintenance Mode (nginx-level)
-Maintenance mode returns `503 Service Unavailable` for the public while keeping WordPress admin access available.
+- 2026-01-12 → `docs/checkpoints/2026-01-12/README.md`
+- 2026-01-14 → `docs/checkpoints/2026-01-14/README.md`
 
-➡ How to use: `docs/MAINTENANCE_MODE.md`
+## Key docs
 
----
+- Playbooks index → `docs/playbooks/README.md`
+- Maintenance mode → `docs/MAINTENANCE_MODE.md`
 
-## 🎨 WordPress Theme
-Primary theme for restoring the site’s appearance:
+## Repo layout (high level)
 
-- Theme: **Motorcade Trust** (`wp-content/themes/motorcade-trust`)
-
----
-
-## 📦 Automation / Provisioning
-See `ansible/` for provisioning and deployment playbooks.
-
-If you are resuming work, start there.
+- `ansible/` — inventories, playbooks, roles, files
+- `docs/` — runbooks, checkpoints, operational notes

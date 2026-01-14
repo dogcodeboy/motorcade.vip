@@ -1,0 +1,4 @@
+---
+# Compatibility shim: some docs reference 19_theme_plugins.yml
+# Canonical playbook filename in this repo is 19_theme_plugins_assets.yml
+- import_playbook: 19_theme_plugins_assets.yml

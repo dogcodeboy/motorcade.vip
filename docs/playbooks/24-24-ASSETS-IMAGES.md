@@ -1,55 +1,48 @@
-# 24 — Deploy Site Image Assets
+# Playbook 24 — Assets (Images) + WP Filesystem Fix (Option C)
 
 ## Purpose
-Copies the Motorcade site image pack to the WordPress uploads directory so the theme/pages can reference stable URLs like:
+This playbook deploys Motorcade website image assets into WordPress **uploads** (not the theme), and hardens the WordPress filesystem settings so media operations (crop/favicon, thumbnail regeneration, etc.) work reliably.
 
-- `/wp-content/uploads/motorcade/<filename>`
+This matches the **Option C** decision: the theme and content reference images from:
 
-This is intentionally **idempotent**: you can rerun it safely.
+- `/wp-content/uploads/motorcade/*`
 
-## What it changes
-On the **web server**:
+## What it does
+1. Ensures the WordPress root exists (`/var/www/motorcade`).
+2. Ensures `wp-content/uploads/motorcade/` exists on the server.
+3. Copies all asset images from the repo into `wp-content/uploads/motorcade/` (idempotent).
+4. Fixes ownership and permissions for `wp-content/uploads`:
+   - owner/group: `nginx:nginx`
+   - directories: `0755`
+   - files: `0644`
+5. Sets `FS_METHOD` to `direct` in `wp-config.php` using a safe `blockinfile` marker.
+6. Optionally imports the uploaded JPGs into the WP Media Library via `wp-cli` (if available).
 
-- Ensures `{{ wp_root }}/wp-content/uploads/motorcade/` exists
-- Copies images from the repo (controller) into that folder
-- Ensures ownership is correct for the web user (typically `nginx:nginx` on Amazon Linux)
-
-## Expected repo inputs
-This playbook expects the controller path:
-
+## Inputs
+Repo asset source (controller):
 - `ansible/files/wp/assets/images/motorcade/`
 
-If you keep a separate `assets/images/motorcade/` at repo root, **copy/sync it into** the expected Ansible path before running.
+Server destinations:
+- `wp-content/uploads/motorcade/`
 
 ## Run
-From the `ansible/` directory at repo root:
+From the repo:
 
 ```bash
+cd ~/Repos/motorcade.vip/ansible
 ansible-playbook -i inventories/prod/hosts.ini --ask-vault-pass playbooks/24_assets_images.yml
 ```
 
 ## Verify
-Pick one image filename you know exists (example: `about-team.jpg`) and run:
+On the server:
 
 ```bash
-ssh -i ~/.ssh/motorcade-key.pem ec2-user@<SERVER_IP> \
-  "ls -la {{ wp_root }}/wp-content/uploads/motorcade/ | head"
+ls -la /var/www/motorcade/wp-content/uploads/motorcade | head
+sudo -u nginx wp --path=/var/www/motorcade eval 'var_dump(wp_is_writable(wp_upload_dir()["basedir"]));'
 ```
 
-And from your workstation:
+In WP Admin:
+- Appearance → Customize → Site Identity → try setting/cropping the Site Icon (favicon)
 
-```bash
-curl -I https://motorcade.vip/wp-content/uploads/motorcade/about-team.jpg
-```
-
-You want `HTTP/2 200` (or `200 OK`).
-
-## If images still don’t appear on the site
-This playbook only **places files**. If the front-end still shows no images, the usual causes are:
-
-1. The theme/pages are referencing a different path (404 in devtools).
-2. Permissions/ownership prevent Nginx from reading the files (403).
-3. Caching (browser/CDN) — hard refresh or test in an incognito window.
-4. The active theme hasn’t been deployed/activated yet.
-
-Check the exact broken image URL in the browser and test it with `curl -I` to see if it’s a 404/403.
+## Notes
+- If Site Health reports "not writable" but uploads work, it’s often because WP checks additional paths (themes/plugins) depending on the filesystem method. `FS_METHOD=direct` + correct ownership resolves this on most nginx+php-fpm stacks.

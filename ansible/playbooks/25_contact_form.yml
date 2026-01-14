@@ -1,18 +1,8 @@
 ---
-- name: "Playbook 25 — Contact / Lead capture (form)"
-  hosts: motorcade
+- name: "Playbook 25 - Contact / Lead capture (form)"
+  hosts: motorcade_web
   become: true
-  vars:
-    wp_path: "/var/www/motorcade"
-    wp_user: "nginx"
-    wp_group: "nginx"
-
   tasks:
-    - name: "Gathering Facts"
-      ansible.builtin.setup:
-
-    # Placeholder: wiring contact form endpoints depends on the selected plugin and/or custom theme hooks.
-    # This playbook keeps the pipeline consistent and can be expanded later without breaking ordering.
-    - name: "Placeholder"
+    - name: Placeholder
       ansible.builtin.debug:
         msg: "Step 25 will wire the contact + security assessment form endpoints and CTA links."
