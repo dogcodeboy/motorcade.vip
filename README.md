@@ -1,45 +1,57 @@
 # motorcade.vip
-Website and Hosting REPO
-## 📌 Project Checkpoints
 
-The authoritative project state is preserved in dated checkpoints.
+Infrastructure, automation, and operational documentation for the **Motorcade** website and platform.
 
-- **Latest:** [`docs/checkpoints/2026-01-12`](docs/checkpoints/2026-01-12)
-
-# Motorcade Platform
-
-This repository contains the infrastructure, automation, and assets for the Motorcade platform.
-
-## 🛠 Maintenance Mode
-
-Motorcade supports a safe, nginx-level maintenance mode that returns `503 Service Unavailable`
-to the public while keeping WordPress admin access available.
-
-➡ **How to use maintenance mode:**  
-📄 [docs/MAINTENANCE_MODE.md](docs/MAINTENANCE_MODE.md)
+This repository is the **authoritative source of truth** for how motorcade.vip is deployed, maintained, and recovered.
 
 ---
 
-See the `ansible/` directory for provisioning and deployment playbooks.
-
-If you are resuming work, start there.
 ## 📌 Canonical Project State (Start Here)
 
-- Latest checkpoint: `docs/checkpoints/2026-01-12/`
-- Phase 1 asset spec: `docs/assets/PHASE-1-ASSET-SPEC.md`
-- Phase 1 asset manifest: `assets/assets-manifest.json`
-- Canonical asset folder tree: `motorcade-assets/`
+If anything conflicts (including chat history), **these documents win**.
 
-If chat history conflicts with these documents, these documents win.
+- **Latest checkpoint:**  
+  `docs/checkpoints/2026-01-12/`
 
-## Operations & Maintenance
+- **Phase 1 asset specification:**  
+  `docs/assets/PHASE-1-ASSET-SPEC.md`
 
-- 🔧 Maintenance Mode  
-  docs/MAINTENANCE_MODE.md
+- **Phase 1 asset manifest:**  
+  `assets/assets-manifest.json`
 
-- 📸 System Checkpoints  
-  docs/checkpoints/
+- **Canonical asset folder tree:**  
+  `motorcade-assets/`
 
-- 💾 Backups & Recovery (Playbooks 16–17)  
-  docs/playbooks/16-BACKUPS.md  
-  docs/playbooks/17-RESTORE-DR.md
+---
+
+## 📸 Project Checkpoints
+
+The authoritative project state is preserved in dated checkpoints.
+
+- **Current:**  
+  [`docs/checkpoints/2026-01-12`](docs/checkpoints/2026-01-12)
+
+Use checkpoints when:
+- Resuming work after downtime
+- Validating configuration drift
+- Auditing historical state
+
+---
+
+## 🛠 Maintenance Mode
+
+Motorcade supports a **safe, nginx-level maintenance mode** that:
+
+- Returns `503 Service Unavailable` to the public
+- Keeps WordPress admin access available
+- Does **not** modify WordPress core or plugins
+
+➡ **How to use maintenance mode:**  
+📄 [`docs/MAINTENANCE_MODE.md`](docs/MAINTENANCE_MODE.md)
+
+---
+
+## ⚙️ Provisioning & Automation
+
+All provisioning, backup, restore, and operational automation lives under:
+
