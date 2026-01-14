@@ -4,6 +4,10 @@
   become: true
   gather_facts: true
 
+  vars_files:
+    - ../group_vars/motorcade/main.yml
+    - ../group_vars/motorcade/vault.yml
+
   vars:
     motorcade_restore_log_dir: "/var/log/motorcade/restore"
     motorcade_restore_test_dir: "/var/tmp/motorcade-restore-test"

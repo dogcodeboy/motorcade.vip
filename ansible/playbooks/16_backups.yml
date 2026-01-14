@@ -4,6 +4,10 @@
   become: true
   gather_facts: true
 
+  vars_files:
+    - ../group_vars/motorcade/main.yml
+    - ../group_vars/motorcade/vault.yml
+
   vars:
     motorcade_web_root: "/var/www/motorcade"
     motorcade_nginx_conf_dirs:

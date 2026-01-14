@@ -1,0 +1,16 @@
+Motorcade 16–18 Vars Load Fix Patch
+
+What this does:
+- Updates ansible/playbooks/16_backups.yml and 17_restore_dr.yml to explicitly load:
+  ../group_vars/motorcade/main.yml
+  ../group_vars/motorcade/vault.yml
+
+How to apply:
+1) Unzip into a temp folder.
+2) Copy the 'ansible/' folder into your repo root (merge/overwrite).
+3) Re-run:
+   cd ansible
+   ansible-playbook --ask-vault-pass -i inventories/prod/hosts.ini playbooks/16_backups.yml
+
+Note:
+- 18_ops_handoff.yml included unchanged for completeness.
