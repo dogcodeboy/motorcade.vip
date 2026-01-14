@@ -1,0 +1,159 @@
+---
+- name: "Motorcade Playbook 19 - Deploy WP Theme + Plugins + Assets"
+  hosts: motorcade
+  become: true
+  gather_facts: true
+
+  vars:
+    wp_path: "/var/www/motorcade"
+    wp_content: "/var/www/motorcade/wp-content"
+    wp_themes: "/var/www/motorcade/wp-content/themes"
+    wp_plugins: "/var/www/motorcade/wp-content/plugins"
+    wp_uploads_motorcade: "/var/www/motorcade/wp-content/uploads/motorcade"
+
+    web_user: "nginx"
+    web_group: "nginx"
+
+    # Theme zip (stored in repo) and expected extracted folder name
+    theme_zip_local: "files/wp/themes/motorcade-trust-theme.zip"
+    theme_dir_name: "motorcade-trust"
+    activate_theme: true   # activates only if wp-cli exists
+
+    # Plugin zips (stored in repo). Add more items as needed.
+    plugin_zips:
+      - "files/wp/plugins/motorcade-content-injector-v1.1.0.zip"
+    activate_plugins: false  # keep false until plugin slugs are confirmed
+
+    # Optional assets zip (stored in repo). Disabled by default.
+    assets_zip_local: "files/wp/assets/motorcade-assets.zip"
+    deploy_assets: false
+
+  tasks:
+    - name: "Sanity check WordPress path exists"
+      ansible.builtin.stat:
+        path: "{{ wp_path }}"
+      register: wp_root
+
+    - name: "Fail if WordPress path missing"
+      ansible.builtin.fail:
+        msg: "WordPress path {{ wp_path }} not found. Aborting."
+      when: not wp_root.stat.exists
+
+    - name: "Ensure uploads/motorcade exists"
+      ansible.builtin.file:
+        path: "{{ wp_uploads_motorcade }}"
+        state: directory
+        owner: "{{ web_user }}"
+        group: "{{ web_group }}"
+        mode: "0755"
+
+    # -------------------------
+    # Theme install
+    # -------------------------
+    - name: "Upload theme zip to remote /tmp"
+      ansible.builtin.copy:
+        src: "{{ theme_zip_local }}"
+        dest: "/tmp/motorcade-theme.zip"
+        mode: "0644"
+
+    - name: "Ensure theme directory exists"
+      ansible.builtin.file:
+        path: "{{ wp_themes }}/{{ theme_dir_name }}"
+        state: directory
+        owner: "{{ web_user }}"
+        group: "{{ web_group }}"
+        mode: "0755"
+
+    - name: "Unpack theme into wp-content/themes/{{ theme_dir_name }}"
+      ansible.builtin.unarchive:
+        src: "/tmp/motorcade-theme.zip"
+        dest: "{{ wp_themes }}/{{ theme_dir_name }}"
+        remote_src: true
+        extra_opts: [ "-o" ]
+
+    - name: "Fix ownership for theme"
+      ansible.builtin.file:
+        path: "{{ wp_themes }}/{{ theme_dir_name }}"
+        state: directory
+        recurse: true
+        owner: "{{ web_user }}"
+        group: "{{ web_group }}"
+
+    # -------------------------
+    # Plugins install (optional)
+    # -------------------------
+    - name: "Upload and unpack plugin zips (if any)"
+      block:
+        - name: "Upload plugin zip {{ item }}"
+          ansible.builtin.copy:
+            src: "{{ item }}"
+            dest: "/tmp/{{ item | basename }}"
+            mode: "0644"
+
+        - name: "Unpack plugin zip {{ item | basename }} into wp-content/plugins/"
+          ansible.builtin.unarchive:
+            src: "/tmp/{{ item | basename }}"
+            dest: "{{ wp_plugins }}"
+            remote_src: true
+            extra_opts: [ "-o" ]
+      loop: "{{ plugin_zips }}"
+      when: plugin_zips is defined and (plugin_zips | length > 0)
+
+    - name: "Fix ownership for plugins directory"
+      ansible.builtin.file:
+        path: "{{ wp_plugins }}"
+        state: directory
+        recurse: true
+        owner: "{{ web_user }}"
+        group: "{{ web_group }}"
+
+    # -------------------------
+    # Assets deploy (optional)
+    # -------------------------
+    - name: "Deploy image assets bundle into uploads/motorcade (optional)"
+      block:
+        - name: "Upload assets zip"
+          ansible.builtin.copy:
+            src: "{{ assets_zip_local }}"
+            dest: "/tmp/motorcade-assets.zip"
+            mode: "0644"
+
+        - name: "Unpack assets into uploads/motorcade/"
+          ansible.builtin.unarchive:
+            src: "/tmp/motorcade-assets.zip"
+            dest: "{{ wp_uploads_motorcade }}"
+            remote_src: true
+            extra_opts: [ "-o" ]
+
+        - name: "Fix ownership for uploads/motorcade assets"
+          ansible.builtin.file:
+            path: "{{ wp_uploads_motorcade }}"
+            state: directory
+            recurse: true
+            owner: "{{ web_user }}"
+            group: "{{ web_group }}"
+      when: deploy_assets | bool
+
+    # -------------------------
+    # Activate theme (only if wp-cli exists)
+    # -------------------------
+    - name: "Check if wp-cli exists"
+      ansible.builtin.command: "wp --info"
+      register: wpcli_check
+      changed_when: false
+      failed_when: false
+
+    - name: "Activate theme via wp-cli (if available)"
+      ansible.builtin.command: "wp theme activate {{ theme_dir_name }} --path={{ wp_path }} --allow-root"
+      when:
+        - activate_theme | bool
+        - wpcli_check.rc == 0
+
+    - name: "Report next steps"
+      ansible.builtin.debug:
+        msg:
+          - "Theme deployed to: {{ wp_themes }}/{{ theme_dir_name }}"
+          - "Plugins deployed to: {{ wp_plugins }}"
+          - "Assets (if enabled) deployed to: {{ wp_uploads_motorcade }}"
+          - "wp-cli present: {{ 'yes' if wpcli_check.rc == 0 else 'no' }}"
+          - "If wp-cli is NOT present, activate theme in WP Admin: Appearance -> Themes -> Activate '{{ theme_dir_name }}'"
