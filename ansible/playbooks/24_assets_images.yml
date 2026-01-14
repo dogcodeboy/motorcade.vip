@@ -1,20 +1,66 @@
 ---
-- name: Deploy Motorcade image assets
-  hosts: web
+- name: "Playbook 24 — Deploy Motorcade image assets (uploads/motorcade/)"
+  hosts: motorcade
   become: true
-  tasks:
-    - name: Ensure motorcade image directory exists
-      file:
-        path: /var/www/motorcade/wp-content/uploads/motorcade/images
-        state: directory
-        owner: apache
-        group: apache
-        mode: '0755'
 
-    - name: Copy image assets
-      copy:
-        src: assets/images/motorcade/
-        dest: /var/www/motorcade/wp-content/uploads/motorcade/images/
-        owner: apache
-        group: apache
-        mode: '0644'
+  vars:
+    wp_root: /var/www/motorcade
+    web_user: nginx
+    web_group: nginx
+
+    # Canonical asset path (per project decision)
+    motorcade_upload_root: "{{ wp_root }}/wp-content/uploads/motorcade"
+
+    # IMPORTANT:
+    # Images live in the repo at ansible/files/wp/assets/images/motorcade/
+    # (sibling of ansible/playbooks). Using playbook_dir makes this location
+    # work no matter where you run ansible-playbook from.
+    local_assets_dir: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/"
+
+  tasks:
+    - name: Assert WordPress root exists
+      ansible.builtin.stat:
+        path: "{{ wp_root }}"
+      register: wp_root_stat
+
+    - name: Fail if WordPress root not found
+      ansible.builtin.fail:
+        msg: "WordPress root not found at {{ wp_root }}. Fix wp_root in vars."
+      when: not wp_root_stat.stat.exists
+
+    - name: Assert local assets directory exists on controller
+      ansible.builtin.stat:
+        path: "{{ local_assets_dir }}"
+      delegate_to: localhost
+      run_once: true
+      become: false
+      register: local_assets_stat
+
+    - name: Fail if local assets are missing (controller)
+      ansible.builtin.fail:
+        msg: "Local assets directory not found: {{ local_assets_dir }} (expected repo path: ansible/files/wp/assets/images/motorcade/)"
+      when: not local_assets_stat.stat.exists
+
+    - name: Ensure Motorcade uploads directory exists
+      ansible.builtin.file:
+        path: "{{ motorcade_upload_root }}"
+        state: directory
+        owner: "{{ web_user }}"
+        group: "{{ web_group }}"
+        mode: "0755"
+
+    - name: Copy Motorcade image assets into uploads (idempotent)
+      ansible.builtin.copy:
+        src: "{{ local_assets_dir }}"
+        dest: "{{ motorcade_upload_root }}/"
+        owner: "{{ web_user }}"
+        group: "{{ web_group }}"
+        mode: "0644"
+
+    - name: Ensure ownership is correct (recurse; does not alter modes)
+      ansible.builtin.file:
+        path: "{{ motorcade_upload_root }}"
+        state: directory
+        owner: "{{ web_user }}"
+        group: "{{ web_group }}"
+        recurse: true

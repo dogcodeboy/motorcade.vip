@@ -1,8 +1,12 @@
 ---
-- name: Deploy Motorcade contact form
-  hosts: web
+- name: "Playbook 25 — Contact / Lead capture (form)"
+  hosts: motorcade
   become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+
   tasks:
-    - name: Ensure contact page exists
-      debug:
-        msg: "Contact form deployment placeholder (WP integration handled via content injector)"
+    - name: Placeholder
+      ansible.builtin.debug:
+        msg: "Step 25 will wire the contact + security assessment form endpoints and CTA links."
