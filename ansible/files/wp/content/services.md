@@ -1,33 +1,40 @@
-<!-- Motorcade Playbook 20 — Services Index -->
-# Security Services Built Around Real Risk
-We provide security services that are planned, staffed, and executed based on environment and threat indicators.
+<section class="mc-section">
+  <div class="mc-container mc-stack">
+    <p class="mc-kicker">Services</p>
+    <h1>Security services built around real environments</h1>
+    <p class="mc-lead">We structure coverage around risk level, site layout, and operational needs — not one‑size‑fits‑all packages.</p>
 
-[Request a Security Assessment](/security-assessment/)
+    <div class="mc-grid-3">
+      <div class="mc-card mc-card-pad">
+        <h3>Armed Site Security</h3>
+        <p>Professional armed guard coverage for commercial properties, industrial sites, and locations with elevated risk and liability.</p>
+      </div>
+      <div class="mc-card mc-card-pad">
+        <h3>Executive Protection</h3>
+        <p>Discreet protection for executives and high‑profile clients, with advance planning, route awareness, and controlled presence.</p>
+      </div>
+      <div class="mc-card mc-card-pad">
+        <h3>Secure Transport &amp; Escort</h3>
+        <p>Security support for movement and transport — planning, coordination, and real‑time awareness to reduce exposure.</p>
+      </div>
+      <div class="mc-card mc-card-pad">
+        <h3>Event Security</h3>
+        <p>Professional presence for events with clear access control, incident handling, and escalation protocols.</p>
+      </div>
+      <div class="mc-card mc-card-pad">
+        <h3>Temporary Detail Coverage</h3>
+        <p>Short‑term coverage for unique situations — travel, heightened threats, or time‑bound operational needs.</p>
+      </div>
+      <div class="mc-card mc-card-pad">
+        <h3>Assessments &amp; Planning</h3>
+        <p>Threat‑informed assessments and written plans: staffing, procedures, access control, and reporting expectations.</p>
+      </div>
+    </div>
 
----
-
-## Core Services
-### Armed Protective Services
-Licensed armed protection for environments where risk is real and response capability matters.
-
-Common use cases:
-- Commercial sites
-- Events and venues
-- High‑risk locations
-- Asset protection
-
-### Executive Protection
-Discreet, professional protection for individuals requiring privacy, planning, and controlled movement.
-
-### Security Assessments & Consulting
-Assessments are the entry point to every engagement. We evaluate the environment and deliver a written recommendation and staffing plan.
-
----
-
-## Support Services (Add‑On Only)
-Supplemental personnel focused on visibility, observation, and reporting — used to support an armed or EP plan when appropriate.
-
----
-
-### Request an Assessment
-[Request a Security Assessment](/security-assessment/)
+    <div class="mc-callout">
+      <h3>Not sure what you need?</h3>
+      <p>Request an assessment and we’ll recommend a scope aligned to your environment and risk profile.</p>
+      <a class="mc-btn" href="/security-assessment/">Request a Security Assessment</a>
+    </div>
+  </div>
+</section>

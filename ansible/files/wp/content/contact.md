@@ -1,21 +1,20 @@
-<!-- Motorcade Playbook 20 — Contact -->
-# Contact Motorcade
-For serious protection needs, the fastest path is a security assessment. For general inquiries, use the form below.
+<section class="mc-section">
+  <div class="mc-container mc-stack">
+    <p class="mc-kicker">Contact</p>
+    <h1>Request a consultation</h1>
+    <p class="mc-lead">Tell us about your environment, timeline, and concerns. We’ll respond with next steps.</p>
 
----
+    <div class="mc-card mc-card-pad">
+      <h3>What to include</h3>
+      <ul class="mc-bullets">
+        <li>Location and type of site / travel</li>
+        <li>Coverage window (dates / hours)</li>
+        <li>Known concerns (patterns, incidents, threats)</li>
+        <li>Preferred contact method</li>
+      </ul>
+    </div>
 
-## Quick Contact
-- **Phone:** (Add number in WP Admin)
-- **Email:** (Add email in WP Admin)
-
----
-
-## General Inquiry
-Use WordPress forms/plugins of your choice. (This page is intentionally conservative until the form workflow is finalized.)
-
----
-
-## Protection Planning
-If you need staffing recommendations, a route plan, or an on-site deployment, start here:
-
-[Request a Security Assessment](/security-assessment/)
+    <p><strong>Next step:</strong> Use the Security Assessment request page to start intake.</p>
+    <a class="mc-btn" href="/security-assessment/">Request a Security Assessment</a>
+  </div>
+</section>

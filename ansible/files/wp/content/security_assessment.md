@@ -1,24 +1,20 @@
-<!-- Motorcade Playbook 20 — Security Assessment (Placeholder page) -->
-# Request a Security Assessment
-Security starts with assessment. We evaluate the environment, risk indicators, and operational constraints to produce a plan you can act on.
+<section class="mc-section">
+  <div class="mc-container mc-stack">
+    <p class="mc-kicker">Security Assessment</p>
+    <h1>Request a Security Assessment</h1>
+    <p class="mc-lead">A short intake helps us recommend the right coverage scope for your environment and risk level.</p>
 
-This page is intentionally simple for now. In the next step, we can add:
-- Intake form (short)
-- Scheduling / request‑to‑book flow
-- Service area gating
+    <div class="mc-card mc-card-pad">
+      <h3>Assessment intake (simple)</h3>
+      <p>For now, contact us with the details below. In a later step we can add a structured form.</p>
+      <ul class="mc-bullets">
+        <li>Location(s) and site type</li>
+        <li>Dates / hours of coverage needed</li>
+        <li>Any recent incidents or concerns</li>
+        <li>Desired outcome (deterrence, escort, access control, etc.)</li>
+      </ul>
+    </div>
 
----
-
-## What We Evaluate
-- Site access and perimeter conditions
-- Operational hours and traffic patterns
-- Incident history and threat indicators
-- Staffing requirements and escalation protocols
-
----
-
-## Next Step
-For now, contact us to request an assessment:
-- **Phone:** (Add number in WP Admin)
-- **Email:** (Add email in WP Admin)
-
+    <p>Email/phone details can be added once you confirm the preferred contact method.</p>
+  </div>
+</section>

@@ -1,0 +1,63 @@
+---
+- name: "Playbook 22 — Theme Presentation Update (Deploy updated Motorcade Trust theme)"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_path: /var/www/motorcade
+    wp_cli: /usr/local/bin/wp
+    theme_slug: motorcade-trust
+    theme_zip: motorcade-trust-theme.zip
+    theme_src: "{{ playbook_dir }}/../files/wp/themes/{{ theme_zip }}"
+    theme_tmp: "/tmp/{{ theme_zip }}"
+    themes_dir: "{{ wp_path }}/wp-content/themes"
+
+  tasks:
+    - name: Verify WordPress themes directory exists
+      ansible.builtin.stat:
+        path: "{{ themes_dir }}"
+      register: themes_dir_stat
+
+    - name: Fail if themes directory missing
+      ansible.builtin.fail:
+        msg: "Themes directory {{ themes_dir }} does not exist."
+      when: not themes_dir_stat.stat.exists
+
+    - name: Upload theme zip
+      ansible.builtin.copy:
+        src: "{{ theme_src }}"
+        dest: "{{ theme_tmp }}"
+        mode: "0644"
+
+    - name: Unpack theme into themes directory
+      ansible.builtin.unarchive:
+        src: "{{ theme_tmp }}"
+        dest: "{{ themes_dir }}"
+        remote_src: true
+
+    - name: Fix ownership for deployed theme
+      ansible.builtin.file:
+        path: "{{ themes_dir }}/{{ theme_slug }}"
+        owner: nginx
+        group: nginx
+        recurse: true
+
+    - name: Activate theme via wp-cli (best-effort)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if [ -x "{{ wp_cli }}" ]; then
+          "{{ wp_cli }}" theme activate "{{ theme_slug }}" --path="{{ wp_path }}" --allow-root >/dev/null
+          echo "activated"
+        else
+          echo "wp-cli-missing"
+        fi
+      args:
+        executable: /bin/bash
+      register: theme_activate
+      changed_when: "'activated' in (theme_activate.stdout | default(''))"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Theme deployed: {{ themes_dir }}/{{ theme_slug }}"
+          - "Theme activation: {{ theme_activate.stdout | default('') }}"

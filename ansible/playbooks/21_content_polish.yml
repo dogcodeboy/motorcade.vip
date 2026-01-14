@@ -1,0 +1,80 @@
+---
+- name: "Playbook 21 — Content Polish (Overwrite formatted page content)"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_path: /var/www/motorcade
+    wp_cli: /usr/local/bin/wp
+    content_tmp_dir: /tmp/motorcade-wp-content
+    content_src_dir: "{{ playbook_dir }}/../files/wp/content"
+
+    pages:
+      - slug: home
+        src: home.md
+      - slug: services
+        src: services.md
+      - slug: executive-protection
+        src: executive_protection.md
+      - slug: about
+        src: about.md
+      - slug: contact
+        src: contact.md
+      - slug: security-assessment
+        src: security_assessment.md
+
+  tasks:
+    - name: Verify wp-cli is available
+      ansible.builtin.stat:
+        path: "{{ wp_cli }}"
+      register: wp_cli_stat
+
+    - name: Fail if wp-cli is missing
+      ansible.builtin.fail:
+        msg: "wp-cli not found at {{ wp_cli }}."
+      when: not wp_cli_stat.stat.exists
+
+    - name: Ensure content staging directory exists
+      ansible.builtin.file:
+        path: "{{ content_tmp_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Upload formatted content files
+      ansible.builtin.copy:
+        src: "{{ content_src_dir }}/{{ item.src }}"
+        dest: "{{ content_tmp_dir }}/{{ item.src }}"
+        mode: "0644"
+      loop: "{{ pages }}"
+      loop_control:
+        label: "{{ item.slug }}"
+
+    - name: Overwrite page content from file (idempotent)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        WP="{{ wp_cli }}"
+        WP_PATH="{{ wp_path }}"
+        SLUG="{{ item.slug }}"
+        SRC="{{ content_tmp_dir }}/{{ item.src }}"
+
+        ID=$($WP post list --post_type=page --name="$SLUG" --field=ID --format=ids --path="$WP_PATH" --allow-root | head -n 1 || true)
+        if [ -z "$ID" ]; then
+          echo "missing:$SLUG"
+          exit 0
+        fi
+
+        CONTENT="$(cat "$SRC")"
+        $WP post update "$ID" --post_content="$CONTENT" --path="$WP_PATH" --allow-root >/dev/null
+        echo "updated:$SLUG"
+      args:
+        executable: /bin/bash
+      register: updates
+      changed_when: "'updated:' in (updates.stdout | default(''))"
+      loop: "{{ pages }}"
+      loop_control:
+        label: "{{ item.slug }}"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Content updated for: {{ pages | map(attribute='slug') | list }}"

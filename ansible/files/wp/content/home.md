@@ -1,51 +1,45 @@
-<!--
-Motorcade Playbook 20 — Home
-Tone: calm, authoritative, compliance-safe, high-trust.
-Primary conversion: Request a Security Assessment.
--->
+<div class="mc-hero">
+  <div class="mc-hero-inner">
+    <p class="mc-kicker">Motorcade Security Solutions</p>
+    <h1 class="mc-hero-title">Professional Security &amp; Executive Protection</h1>
+    <p class="mc-hero-lead">Calm, controlled protection services built around real risk — not guesswork.</p>
+    <div class="mc-hero-ctas">
+      <a class="mc-btn" href="/security-assessment/">Request a Security Assessment</a>
+      <a class="mc-btn mc-btn-ghost" href="/services/">View Services</a>
+    </div>
+  </div>
+</div>
 
-# Professional Security & Executive Protection
-Calm, controlled protection services built around real risk — not guesswork.
+<section class="mc-section">
+  <div class="mc-container mc-stack">
+    <h2>What Motorcade Provides</h2>
+    <div class="mc-grid-3">
+      <div class="mc-card mc-card-pad">
+        <h3>Armed Protective Services</h3>
+        <p>Licensed armed protection for commercial sites, events, and high‑risk environments — delivered with clear protocols and disciplined professionalism.</p>
+      </div>
+      <div class="mc-card mc-card-pad">
+        <h3>Executive Protection</h3>
+        <p>Discreet protection for executives, dignitaries, and high‑net‑worth individuals. Planning first. Presence second. Always confidential.</p>
+      </div>
+      <div class="mc-card mc-card-pad">
+        <h3>Security Assessments</h3>
+        <p>We evaluate risk factors and produce a written plan you can act on — staffing, access control, procedures, and escalation paths.</p>
+      </div>
+    </div>
 
-[Request a Security Assessment](/security-assessment/) • [View Services](/services/)
+    <h2>How We Work</h2>
+    <ol class="mc-steps">
+      <li><strong>Confidential intake</strong> — we collect only what’s needed to understand the environment.</li>
+      <li><strong>Threat &amp; environment assessment</strong> — location, access control, patterns, and risk indicators.</li>
+      <li><strong>Deployment plan</strong> — staffing recommendations, shift structure, and escalation protocols.</li>
+      <li><strong>Execution &amp; reporting</strong> — clear terms, clear reporting, professional delivery.</li>
+    </ol>
 
----
-
-## What Motorcade Provides
-### Armed Protective Services
-Licensed armed protection for commercial sites, events, and high-risk environments — delivered with clear protocols and disciplined professionalism.
-
-### Executive Protection
-Discreet protection for executives, dignitaries, and high‑net‑worth individuals. Planning first. Presence second. Always confidential.
-
-### Security Assessments & Consulting
-When the environment changes, security needs to be reassessed. We evaluate risk factors and produce a written plan you can act on.
-
----
-
-## How We Work (Assessment‑Led)
-1. **Confidential intake** — we collect only what is needed to understand the environment.
-2. **Threat & environment assessment** — location, access control, patterns, and risk indicators.
-3. **Deployment plan** — staffing recommendation, shift structure, and escalation protocols.
-4. **Contract + execution** — clear terms, clear reporting, and professional delivery.
-
----
-
-## Built for Clients Who Need Defensible Security
-Motorcade is designed to read well to corporate buyers, attorneys, and insurers:
-- Compliance-first operations
-- Documented process and reporting
-- Calm authority — no intimidation, no theatrics
-
----
-
-## Service Area
-Serving the **Houston metropolitan area**.
-Central & South Texas available by request.
-
----
-
-### Next Step
-If you need protection planning, start with a short assessment.
-
-[Request a Security Assessment](/security-assessment/)
+    <div class="mc-callout">
+      <h3>Need coverage in Texas?</h3>
+      <p>Start with a security assessment and we’ll recommend a scope that matches your environment and risk level.</p>
+      <a class="mc-btn" href="/security-assessment/">Request a Security Assessment</a>
+    </div>
+  </div>
+</section>

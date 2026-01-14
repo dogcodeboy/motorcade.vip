@@ -1,26 +1,19 @@
-<!-- Motorcade Playbook 20 — About -->
-# About Motorcade
-Motorcade provides professional security and executive protection services designed for calm, lawful, and methodical operations.
+<section class="mc-section">
+  <div class="mc-container mc-stack">
+    <p class="mc-kicker">About</p>
+    <h1>Security built on discipline and accountability</h1>
+    <p class="mc-lead">Motorcade focuses on calm, professional security services designed around real risk — not marketing theater.</p>
 
----
+    <h2>Our operating principles</h2>
+    <ul class="mc-bullets">
+      <li>Threat‑informed planning</li>
+      <li>Clear command structure and reporting</li>
+      <li>Professional conduct and restraint</li>
+      <li>Client confidentiality</li>
+    </ul>
 
-## What We Stand For
-### Compliance‑First
-We operate with clear standards, documented procedures, and professional reporting.
+    <p>If you’re unsure what coverage looks like for your environment, start with an assessment and we’ll provide a practical recommendation.</p>
 
-### Assessment‑Driven Planning
-Security works best when it is built around the environment and real risk factors — not assumptions.
-
-### Responsible Deployment
-We staff and deploy appropriately to reduce liability and increase outcomes.
-
----
-
-## Operating Area
-Houston metropolitan area.
-Central & South Texas available by request.
-
----
-
-### Need Protection Planning?
-[Request a Security Assessment](/security-assessment/)
+    <a class="mc-btn" href="/security-assessment/">Request a Security Assessment</a>
+  </div>
+</section>
