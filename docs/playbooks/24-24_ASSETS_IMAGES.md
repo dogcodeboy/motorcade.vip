@@ -1,35 +1,23 @@
-# 24 — Assets Images
+# Playbook 24 — Assets / Images
 
 ## Purpose
-Deploy the Motorcade marketing image assets to the WordPress uploads directory **and** (optionally) make them usable by the theme.
+Deploys the Motorcade image pack to WordPress so the theme can load hero + service images from:
 
-This playbook copies images from the repo to the server at:
+`wp-content/uploads/motorcade/`
 
-- `/var/www/motorcade/wp-content/uploads/motorcade/`
+## Source of truth (repo)
+Images live on the controller in this path:
 
-The **Motorcade Trust** theme will render images from this folder automatically, even if they are not imported into the Media Library. If you also import them into Media, the theme will prefer the Media Library URL.
-
-## Inputs
-Repo source (controller):
-
-- `ansible/files/wp/assets/images/motorcade/` *(preferred)*
-- or `ansible/files/wp/assets/motorcade-assets.zip` (if you keep the assets zipped and unzip first)
-
-Server destination:
-
-- `/var/www/motorcade/wp-content/uploads/motorcade/`
+`motorcade.vip/ansible/files/wp/assets/images/motorcade/`
 
 ## Run
-From `~/Repos/motorcade.vip/ansible`:
+From the repo root:
 
 ```bash
+cd ~/Repos/motorcade.vip/ansible
 ansible-playbook -i inventories/prod/hosts.ini --ask-vault-pass playbooks/24_assets_images.yml
 ```
 
 ## Notes
-- This playbook is **idempotent**; re-running is safe.
-- If you want the images to appear in WP Admin → Media, you must import them (WP does not auto-scan upload folders).
-  - Example (on the server, as the web user):
-    ```bash
-    sudo -u nginx wp --path=/var/www/motorcade media import /var/www/motorcade/wp-content/uploads/motorcade/* --title-from-filename
-    ```
+- The theme references images by filename (e.g. `hero-executive-protection.jpg`).
+- If you want these files registered in **Media → Library**, set `mc_import_media: true` in the playbook.

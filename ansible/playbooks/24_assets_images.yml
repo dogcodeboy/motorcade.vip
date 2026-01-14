@@ -2,65 +2,79 @@
 - name: "Playbook 24 — Deploy Motorcade image assets (uploads/motorcade/)"
   hosts: motorcade
   become: true
-
   vars:
-    wp_root: /var/www/motorcade
-    web_user: nginx
-    web_group: nginx
+    wp_path: "/var/www/motorcade"
+    wp_user: "nginx"
+    wp_group: "nginx"
 
-    # Canonical asset path (per project decision)
-    motorcade_upload_root: "{{ wp_root }}/wp-content/uploads/motorcade"
+    uploads_dir: "{{ wp_path }}/wp-content/uploads"
+    motorcade_uploads_dir: "{{ uploads_dir }}/motorcade"
 
-    # IMPORTANT:
-    # Images live in the repo at ansible/files/wp/assets/images/motorcade/
-    # (sibling of ansible/playbooks). Using playbook_dir makes this location
-    # work no matter where you run ansible-playbook from.
-    local_assets_dir: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/"
+    # Controller-side path (relative to repo root when run from motorcade.vip/ansible/)
+    # playbook_dir = .../ansible/playbooks
+    local_assets_dir: "{{ playbook_dir }}/../files/wp/assets/images/motorcade"
+
+    # Set true if you want to register the images into the WP Media Library.
+    # (Not required for images to load on the front-end if your theme references /wp-content/uploads/motorcade/* directly.)
+    mc_import_media: false
 
   tasks:
-    - name: Assert WordPress root exists
+    - name: "Gathering Facts"
+      ansible.builtin.setup:
+
+    - name: "Assert WordPress root exists"
       ansible.builtin.stat:
-        path: "{{ wp_root }}"
-      register: wp_root_stat
+        path: "{{ wp_path }}/wp-config.php"
+      register: wp_root
 
-    - name: Fail if WordPress root not found
+    - name: "Fail if WordPress root not found"
       ansible.builtin.fail:
-        msg: "WordPress root not found at {{ wp_root }}. Fix wp_root in vars."
-      when: not wp_root_stat.stat.exists
+        msg: "WordPress root not found at {{ wp_path }} (missing wp-config.php)"
+      when: not wp_root.stat.exists
 
-    - name: Assert local assets directory exists on controller
+    - name: "Assert local assets directory exists on controller"
       ansible.builtin.stat:
         path: "{{ local_assets_dir }}"
       delegate_to: localhost
-      run_once: true
       become: false
-      register: local_assets_stat
+      register: local_assets
 
-    - name: Fail if local assets are missing (controller)
+    - name: "Fail if local assets are missing (controller)"
       ansible.builtin.fail:
         msg: "Local assets directory not found: {{ local_assets_dir }} (expected repo path: ansible/files/wp/assets/images/motorcade/)"
-      when: not local_assets_stat.stat.exists
+      when: not local_assets.stat.exists
 
-    - name: Ensure Motorcade uploads directory exists
+    - name: "Ensure Motorcade uploads directory exists"
       ansible.builtin.file:
-        path: "{{ motorcade_upload_root }}"
+        path: "{{ motorcade_uploads_dir }}"
         state: directory
-        owner: "{{ web_user }}"
-        group: "{{ web_group }}"
+        owner: "{{ wp_user }}"
+        group: "{{ wp_group }}"
         mode: "0755"
 
-    - name: Copy Motorcade image assets into uploads (idempotent)
+    - name: "Copy Motorcade image assets into uploads (idempotent)"
       ansible.builtin.copy:
-        src: "{{ local_assets_dir }}"
-        dest: "{{ motorcade_upload_root }}/"
-        owner: "{{ web_user }}"
-        group: "{{ web_group }}"
-        mode: "0644"
+        src: "{{ local_assets_dir }}/"
+        dest: "{{ motorcade_uploads_dir }}/"
+        owner: "{{ wp_user }}"
+        group: "{{ wp_group }}"
+        mode: preserve
+      notify: "fix ownership (recursive)"
 
-    - name: Ensure ownership is correct (recurse; does not alter modes)
+    - name: "Optional: Register assets in Media Library (wp-cli)"
+      ansible.builtin.command: >
+        wp --path={{ wp_path }} media import {{ motorcade_uploads_dir }}/* --skip-copy
+      become_user: "{{ wp_user }}"
+      register: wp_media_import
+      changed_when: false
+      failed_when: false
+      when: mc_import_media | bool
+
+  handlers:
+    - name: "fix ownership (recursive)"
       ansible.builtin.file:
-        path: "{{ motorcade_upload_root }}"
+        path: "{{ motorcade_uploads_dir }}"
         state: directory
-        owner: "{{ web_user }}"
-        group: "{{ web_group }}"
+        owner: "{{ wp_user }}"
+        group: "{{ wp_group }}"
         recurse: true

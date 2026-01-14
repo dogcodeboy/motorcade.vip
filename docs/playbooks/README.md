@@ -1,11 +1,6 @@
-# Docs — Playbooks
+# Playbooks Documentation
 
-This folder contains human-readable documentation for each playbook in `ansible/playbooks/`.
+This folder contains operator docs that match the playbooks under `motorcade.vip/ansible/playbooks/`.
 
-If you add a new playbook, add a matching doc file here using the naming pattern:
-
-- `NN-NN-<TITLE>.md`
-
-Recent additions:
-- `24-24-ASSETS-IMAGES.md`
-- `25-25-CONTACT-FORM.md`
+- 24-24_ASSETS_IMAGES.md
+- 25-25_CONTACT_FORM.md
