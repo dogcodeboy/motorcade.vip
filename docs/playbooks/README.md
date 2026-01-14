@@ -34,3 +34,13 @@ Quick links to operational playbooks and their documentation.
 - **17** — Restore / DR → `docs/playbooks/17-RESTORE-DR.md`
 - **18** — Ops Handoff → `docs/playbooks/18-OPS-HANDOFF.md`
 - **19** — Theme/Plugins/Assets → `docs/playbooks/19-THEME-PLUGINS-ASSETS.md`
+
+
+## Post-Provisioning
+
+- **15** `ansible/playbooks/15_asset_inventory.yml` → `docs/playbooks/15-ASSET-INVENTORY-AND-OWNERSHIP.md`
+- **16** `ansible/playbooks/16_backups.yml` → `docs/playbooks/16-BACKUPS.md`
+- **17** `ansible/playbooks/17_restore_dr.yml` → `docs/playbooks/17-RESTORE-DR.md`
+- **18** `ansible/playbooks/18_ops_handoff.yml` → `docs/playbooks/18-OPS-HANDOFF.md`
+- **19** `ansible/playbooks/19_theme_plugins_assets.yml` → `docs/playbooks/19-THEME-PLUGINS-ASSETS.md`
+- **20** `ansible/playbooks/20_content_structure.yml` → `docs/playbooks/20-CONTENT-STRUCTURE.md`
