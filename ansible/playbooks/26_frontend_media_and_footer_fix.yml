@@ -1,0 +1,212 @@
+---
+# Playbook 26 — Fix frontend media rendering + ensure DPS license footer is live
+# Targets: nginx static serving for /wp-content/uploads, SELinux contexts, uploads perms,
+#          and ensure Motorcade Trust theme (with DPS license footer) is active.
+#
+# Safe + idempotent. Does NOT re-upload via WP Admin. Uses Ansible + wp-cli only.
+
+- name: "Playbook 26 — Fix frontend media rendering + footer license"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    wp_cli: /usr/local/bin/wp
+
+    nginx_http_conf: /etc/nginx/conf.d/motorcade.conf
+    nginx_ssl_conf: /etc/nginx/conf.d/motorcade-ssl.conf
+
+    # Deployed theme (must already exist from Playbook 22)
+    theme_slug: motorcade-trust
+    expected_dps_license: "B31011701"
+
+    # If you want to also register repo assets into WP Media Library:
+    register_repo_assets: false
+    repo_assets_remote_dir: "{{ wp_root }}/wp-content/uploads/motorcade"
+
+  tasks:
+    - name: Assert WordPress root exists
+      ansible.builtin.stat:
+        path: "{{ wp_root }}/wp-config.php"
+      register: wp_cfg
+
+    - name: Fail if WordPress root not found
+      ansible.builtin.fail:
+        msg: "WordPress root not found at {{ wp_root }} (missing wp-config.php)."
+      when: not wp_cfg.stat.exists
+
+    - name: Ensure nginx + SELinux tooling packages are present
+      ansible.builtin.package:
+        name:
+          - policycoreutils
+          - policycoreutils-python-utils
+        state: present
+
+    - name: Detect SELinux enforcement (getenforce)
+      ansible.builtin.command: getenforce
+      register: selinux_mode
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure uploads directory ownership (nginx:nginx)
+      ansible.builtin.file:
+        path: "{{ wp_root }}/wp-content/uploads"
+        state: directory
+        owner: nginx
+        group: nginx
+        recurse: true
+
+    - name: Ensure uploads perms (dirs 0755, files 0644)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        find "{{ wp_root }}/wp-content/uploads" -type d -exec chmod 0755 {} \;
+        find "{{ wp_root }}/wp-content/uploads" -type f -exec chmod 0644 {} \;
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Apply SELinux contexts for WordPress (best-effort, only if SELinux != Disabled)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        MODE="{{ selinux_mode.stdout | default('Disabled') }}"
+        if [ "$MODE" = "Disabled" ]; then
+          echo "selinux:disabled"
+          exit 0
+        fi
+
+        # Allow nginx/php-fpm to read site content
+        semanage fcontext -a -t httpd_sys_content_t "{{ wp_root }}(/.*)?" || true
+        # Allow WordPress to write uploads (media) and upgrade dirs if needed
+        semanage fcontext -a -t httpd_sys_rw_content_t "{{ wp_root }}/wp-content/uploads(/.*)?" || true
+        semanage fcontext -a -t httpd_sys_rw_content_t "{{ wp_root }}/wp-content/upgrade(/.*)?" || true
+
+        restorecon -Rv "{{ wp_root }}" >/dev/null
+        echo "selinux:applied"
+      args:
+        executable: /bin/bash
+      register: selinux_apply
+      changed_when: "'selinux:applied' in (selinux_apply.stdout | default(''))"
+      failed_when: false
+
+    - name: Ensure nginx configs exist (HTTP + SSL)
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ nginx_http_conf }}"
+        - "{{ nginx_ssl_conf }}"
+      register: nginx_conf_stats
+
+    - name: Fail if nginx vhost configs missing
+      ansible.builtin.fail:
+        msg: "Missing nginx vhost config: {{ item.item }}"
+      when: not item.stat.exists
+      loop: "{{ nginx_conf_stats.results }}"
+
+    - name: Inject uploads/static locations into SSL vhost (idempotent)
+      ansible.builtin.blockinfile:
+        path: "{{ nginx_ssl_conf }}"
+        marker: "# {mark} MOTORCADE_STATIC_UPLOADS"
+        insertafter: "location / \{"
+        block: |
+          # Serve uploaded media directly (avoid routing images through PHP)
+          location ^~ /wp-content/uploads/ {
+              try_files $uri =404;
+              access_log off;
+              expires 30d;
+              add_header Cache-Control "public, max-age=2592000";
+          }
+
+          # Cacheable static assets
+          location ~* \.(?:css|js|jpg|jpeg|png|gif|svg|webp|ico|woff2?|ttf|eot)$ {
+              try_files $uri =404;
+              access_log off;
+              expires 30d;
+              add_header Cache-Control "public, max-age=2592000";
+          }
+      notify: reload nginx
+
+    - name: Inject uploads/static locations into HTTP vhost (idempotent)
+      ansible.builtin.blockinfile:
+        path: "{{ nginx_http_conf }}"
+        marker: "# {mark} MOTORCADE_STATIC_UPLOADS"
+        insertafter: "location / \{"
+        block: |
+          # Serve uploaded media directly (avoid routing images through PHP)
+          location ^~ /wp-content/uploads/ {
+              try_files $uri =404;
+              access_log off;
+              expires 30d;
+              add_header Cache-Control "public, max-age=2592000";
+          }
+
+          # Cacheable static assets
+          location ~* \.(?:css|js|jpg|jpeg|png|gif|svg|webp|ico|woff2?|ttf|eot)$ {
+              try_files $uri =404;
+              access_log off;
+              expires 30d;
+              add_header Cache-Control "public, max-age=2592000";
+          }
+      notify: reload nginx
+
+    - name: Test nginx config
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Verify wp-cli exists
+      ansible.builtin.stat:
+        path: "{{ wp_cli }}"
+      register: wpcli_stat
+
+    - name: Fail if wp-cli missing
+      ansible.builtin.fail:
+        msg: "wp-cli not found at {{ wp_cli }}."
+      when: not wpcli_stat.stat.exists
+
+    - name: Ensure Motorcade Trust theme is active (ensures DPS footer template is used)
+      ansible.builtin.command: >
+        {{ wp_cli }} theme activate {{ theme_slug }} --path={{ wp_root }} --allow-root
+      register: theme_activate
+      changed_when: "'Theme switched' in (theme_activate.stdout | default(''))"
+      failed_when: false
+
+    - name: Verify DPS license is present in deployed theme footer.php (server-side check)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        FOOT="{{ wp_root }}/wp-content/themes/{{ theme_slug }}/footer.php"
+        if [ ! -f "$FOOT" ]; then
+          echo "missing-footer.php"
+          exit 0
+        fi
+        if grep -Fq "{{ expected_dps_license }}" "$FOOT"; then
+          echo "dps:present"
+        else
+          echo "dps:missing"
+        fi
+      args:
+        executable: /bin/bash
+      register: dps_footer_check
+      changed_when: false
+
+    - name: Optional — register repo assets in Media Library (wp-cli)
+      ansible.builtin.command: >
+        {{ wp_cli }} media import {{ repo_assets_remote_dir }}/* --skip-themes --skip-plugins --path={{ wp_root }} --allow-root
+      when: register_repo_assets | bool
+      register: media_import
+      changed_when: "'Imported' in (media_import.stdout | default(''))"
+      failed_when: false
+
+    - name: Print summary / next-action hints
+      ansible.builtin.debug:
+        msg:
+          - "SELinux mode: {{ selinux_mode.stdout | default('unknown') }}"
+          - "SELinux apply result: {{ selinux_apply.stdout | default('n/a') }}"
+          - "Theme activate output: {{ theme_activate.stdout | default('n/a') }}"
+          - "DPS footer check: {{ dps_footer_check.stdout | default('unknown') }}"
+          - "If images still do not render, run: curl -I https://motorcade.vip/wp-content/uploads/<path-to-image>"
+          - "Then check nginx access/error logs for 403/404: /var/log/nginx/error.log /var/log/nginx/access.log"
+
+  handlers:
+    - name: reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded

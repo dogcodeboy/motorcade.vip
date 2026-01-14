@@ -65,6 +65,22 @@
                   try_files $uri $uri/ /index.php?$args;
               }
 
+              # Serve uploaded media directly (avoid routing images through PHP)
+              location ^~ /wp-content/uploads/ {
+                  try_files $uri =404;
+                  access_log off;
+                  expires 30d;
+                  add_header Cache-Control "public, max-age=2592000";
+              }
+
+              # Cacheable static assets
+              location ~* \.(?:css|js|jpg|jpeg|png|gif|svg|webp|ico|woff2?|ttf|eot)$ {
+                  try_files $uri =404;
+                  access_log off;
+                  expires 30d;
+                  add_header Cache-Control "public, max-age=2592000";
+              }
+
               location ~ \.php$ {
                   include fastcgi_params;
                   fastcgi_pass unix:/run/php-fpm/www.sock;
@@ -120,6 +136,22 @@
 
               location / {
                   try_files $uri $uri/ /index.php?$args;
+              }
+
+              # Serve uploaded media directly (avoid routing images through PHP)
+              location ^~ /wp-content/uploads/ {
+                  try_files $uri =404;
+                  access_log off;
+                  expires 30d;
+                  add_header Cache-Control "public, max-age=2592000";
+              }
+
+              # Cacheable static assets
+              location ~* \.(?:css|js|jpg|jpeg|png|gif|svg|webp|ico|woff2?|ttf|eot)$ {
+                  try_files $uri =404;
+                  access_log off;
+                  expires 30d;
+                  add_header Cache-Control "public, max-age=2592000";
               }
 
               location ~ \.php$ {
