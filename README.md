@@ -54,4 +54,43 @@ Motorcade supports a **safe, nginx-level maintenance mode** that:
 ## ⚙️ Provisioning & Automation
 
 All provisioning, backup, restore, and operational automation lives under:
+ansible/
+
+
+If you are resuming work or deploying changes, **start there**.
+
+---
+
+## 🧰 Operations & Maintenance
+
+Key operational documentation:
+
+- 🔧 **Maintenance Mode**  
+  `docs/MAINTENANCE_MODE.md`
+
+- 📸 **System Checkpoints**  
+  `docs/checkpoints/`
+
+- 💾 **Backups & Recovery**  
+  - Playbook 16: `docs/playbooks/16-BACKUPS.md`  
+  - Playbook 17: `docs/playbooks/17-RESTORE-DR.md`
+
+Optional actions (such as enabling nightly backups) are clearly labeled inside the playbooks.
+
+---
+
+## 🧭 Working Rules
+
+- This repo is **production-facing**
+- Do not modify live systems without:
+  - A corresponding playbook
+  - A checkpoint reference
+- When in doubt, restore from checkpoint before proceeding
+
+---
+
+**Motorcade Operations are designed to be:**
+- Predictable
+- Recoverable
+- Auditable
 
