@@ -1,0 +1,175 @@
+---
+- name: "Motorcade Playbook 16 - Backups (files + database)"
+  hosts: motorcade
+  become: true
+  gather_facts: true
+
+  vars:
+    motorcade_web_root: "/var/www/motorcade"
+    motorcade_nginx_conf_dirs:
+      - "/etc/nginx/conf.d"
+      - "/etc/nginx/snippets"
+    motorcade_maintenance_dir: "/var/www/motorcade/maintenance"
+
+    motorcade_backup_root: "/var/backups/motorcade"
+    motorcade_backup_log_dir: "/var/log/motorcade/backups"
+
+    motorcade_backup_enable_timer: false
+    motorcade_backup_run_now: false
+
+    motorcade_backup_script_path: "/usr/local/sbin/motorcade-backup.sh"
+
+    # Uses your group_vars (vault-backed)
+    wp_db_host: "localhost"
+
+  tasks:
+    - name: "Ensure backup directories exist"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - "{{ motorcade_backup_root }}"
+        - "{{ motorcade_backup_log_dir }}"
+
+    - name: "Write /root/.my.cnf for consistent mysqldump (0600)"
+      ansible.builtin.copy:
+        dest: "/root/.my.cnf"
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          [client]
+          user={{ wp_db_user }}
+          password={{ wp_db_password }}
+          host={{ wp_db_host }}
+
+    - name: "Install backup script"
+      ansible.builtin.copy:
+        dest: "{{ motorcade_backup_script_path }}"
+        owner: root
+        group: root
+        mode: "0750"
+        content: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          WEB_ROOT="{{ motorcade_web_root }}"
+          BACKUP_ROOT="{{ motorcade_backup_root }}"
+          LOG_DIR="{{ motorcade_backup_log_dir }}"
+          DB_NAME="{{ wp_db_name }}"
+
+          TS="$(date +%Y%m%d-%H%M%S)"
+          DAY_DIR="${BACKUP_ROOT}/$(date +%Y/%m/%d)"
+          mkdir -p "${DAY_DIR}" "${LOG_DIR}"
+
+          LOG_FILE="${LOG_DIR}/backup-${TS}.log"
+          exec > >(tee -a "${LOG_FILE}") 2>&1
+
+          echo "[motorcade] backup starting: ${TS}"
+          echo "[motorcade] day_dir: ${DAY_DIR}"
+
+          # Manifest header
+          MANIFEST="${DAY_DIR}/manifest-${TS}.txt"
+          {
+            echo "MOTORCADE BACKUP MANIFEST"
+            echo "timestamp=${TS}"
+            echo "host=$(hostname)"
+            echo "web_root=${WEB_ROOT}"
+            echo "db_name=${DB_NAME}"
+          } > "${MANIFEST}"
+
+          # DB dump
+          echo "[motorcade] dumping database..."
+          DB_OUT="${DAY_DIR}/db-${DB_NAME}-${TS}.sql.gz"
+          mysqldump --defaults-extra-file=/root/.my.cnf --single-transaction --routines --triggers "${DB_NAME}" | gzip -c > "${DB_OUT}"
+          echo "db_dump=${DB_OUT}" >> "${MANIFEST}"
+
+          # wp-content archive (only change surface)
+          echo "[motorcade] archiving wp-content..."
+          WP_CONTENT_OUT="${DAY_DIR}/wp-content-${TS}.tar.gz"
+          tar -C "${WEB_ROOT}" -czf "${WP_CONTENT_OUT}" wp-content
+          echo "wp_content=${WP_CONTENT_OUT}" >> "${MANIFEST}"
+
+          # nginx + maintenance archive
+          echo "[motorcade] archiving nginx + maintenance..."
+          NGINX_OUT="${DAY_DIR}/nginx-and-maintenance-${TS}.tar.gz"
+          TMP_LIST="$(mktemp)"
+          {
+            for d in {{ motorcade_nginx_conf_dirs | join(' ') }}; do
+              [ -d "$d" ] && echo "$d"
+            done
+            [ -d "{{ motorcade_maintenance_dir }}" ] && echo "{{ motorcade_maintenance_dir }}"
+          } > "${TMP_LIST}"
+          tar -czf "${NGINX_OUT}" -T "${TMP_LIST}"
+          rm -f "${TMP_LIST}"
+          echo "nginx_maintenance=${NGINX_OUT}" >> "${MANIFEST}"
+
+          # Checksums
+          echo "[motorcade] writing checksums..."
+          (cd "${DAY_DIR}" && sha256sum "$(basename "${DB_OUT}")" "$(basename "${WP_CONTENT_OUT}")" "$(basename "${NGINX_OUT}")" "$(basename "${MANIFEST}")") \
+            > "${DAY_DIR}/sha256-${TS}.txt"
+
+          echo "[motorcade] backup complete: ${TS}"
+
+    - name: "Install systemd unit for backups"
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/motorcade-backup.service"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Motorcade backup (DB + files)
+
+          [Service]
+          Type=oneshot
+          ExecStart={{ motorcade_backup_script_path }}
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: "Install systemd timer (nightly 02:15)"
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/motorcade-backup.timer"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Run Motorcade backup nightly
+
+          [Timer]
+          OnCalendar=*-*-* 02:15:00
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+
+    - name: "Reload systemd"
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: "Enable + start backup timer (optional)"
+      ansible.builtin.systemd:
+        name: motorcade-backup.timer
+        enabled: true
+        state: started
+      when: motorcade_backup_enable_timer | bool
+
+    - name: "Run a backup now (optional)"
+      ansible.builtin.command: "{{ motorcade_backup_script_path }}"
+      register: backup_run
+      changed_when: true
+      when: motorcade_backup_run_now | bool
+
+    - name: "Show where backups/logs are stored"
+      ansible.builtin.debug:
+        msg:
+          - "Backups: {{ motorcade_backup_root }}/YYYY/MM/DD"
+          - "Logs: {{ motorcade_backup_log_dir }}"
+          - "Script: {{ motorcade_backup_script_path }}"
+          - "Enable timer: -e motorcade_backup_enable_timer=true"
+          - "Run now: -e motorcade_backup_run_now=true"

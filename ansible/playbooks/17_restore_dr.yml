@@ -1,0 +1,142 @@
+---
+- name: "Motorcade Playbook 17 - Restore & Disaster Recovery (DR)"
+  hosts: motorcade
+  become: true
+  gather_facts: true
+
+  vars:
+    motorcade_restore_log_dir: "/var/log/motorcade/restore"
+    motorcade_restore_test_dir: "/var/tmp/motorcade-restore-test"
+    motorcade_restore_script_path: "/usr/local/sbin/motorcade-restore.sh"
+    motorcade_web_root: "/var/www/motorcade"
+
+  tasks:
+    - name: "Ensure restore log directory exists"
+      ansible.builtin.file:
+        path: "{{ motorcade_restore_log_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: "Ensure restore test directory exists"
+      ansible.builtin.file:
+        path: "{{ motorcade_restore_test_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: "Install restore script"
+      ansible.builtin.copy:
+        dest: "{{ motorcade_restore_script_path }}"
+        owner: root
+        group: root
+        mode: "0750"
+        content: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          usage() {
+            cat <<EOF
+          Usage:
+            motorcade-restore.sh --backup-dir <path> --mode <test|apply>
+
+          Notes:
+            - test: extracts archives into {{ motorcade_restore_test_dir }} only
+            - apply: copies wp-content into {{ motorcade_web_root }} after staging
+            - DB restore is optional and requires confirmation prompt
+          EOF
+          }
+
+          BACKUP_DIR=""
+          MODE=""
+
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              --backup-dir) BACKUP_DIR="$2"; shift 2;;
+              --mode) MODE="$2"; shift 2;;
+              -h|--help) usage; exit 0;;
+              *) echo "Unknown arg: $1"; usage; exit 2;;
+            esac
+          done
+
+          if [[ -z "${BACKUP_DIR}" || -z "${MODE}" ]]; then
+            usage; exit 2
+          fi
+          if [[ ! -d "${BACKUP_DIR}" ]]; then
+            echo "Backup dir not found: ${BACKUP_DIR}"; exit 2
+          fi
+          if [[ "${MODE}" != "test" && "${MODE}" != "apply" ]]; then
+            echo "Mode must be test or apply"; exit 2
+          fi
+
+          TS="$(date +%Y%m%d-%H%M%S)"
+          LOG_DIR="{{ motorcade_restore_log_dir }}"
+          mkdir -p "${LOG_DIR}"
+          LOG_FILE="${LOG_DIR}/restore-${TS}.log"
+          exec > >(tee -a "${LOG_FILE}") 2>&1
+
+          echo "[motorcade] restore starting: ${TS}"
+          echo "[motorcade] backup_dir: ${BACKUP_DIR}"
+          echo "[motorcade] mode: ${MODE}"
+
+          # Find latest artifacts in the backup dir
+          DB_GZ="$(ls -1t "${BACKUP_DIR}"/db-*.sql.gz 2>/dev/null | head -n 1 || true)"
+          WP_TGZ="$(ls -1t "${BACKUP_DIR}"/wp-content-*.tar.gz 2>/dev/null | head -n 1 || true)"
+
+          if [[ -z "${WP_TGZ}" ]]; then
+            echo "No wp-content archive found in ${BACKUP_DIR}"; exit 2
+          fi
+
+          STAGE="{{ motorcade_restore_test_dir }}/stage-${TS}"
+          mkdir -p "${STAGE}"
+
+          echo "[motorcade] extracting wp-content archive to stage..."
+          tar -C "${STAGE}" -xzf "${WP_TGZ}"
+
+          echo "[motorcade] stage contents:"
+          ls -la "${STAGE}" | head
+
+          if [[ "${MODE}" == "test" ]]; then
+            echo "[motorcade] test mode complete. staged at: ${STAGE}"
+            exit 0
+          fi
+
+          # apply mode
+          if [[ ! -d "${STAGE}/wp-content" ]]; then
+            echo "Stage missing wp-content directory."; exit 2
+          fi
+
+          echo "[motorcade] APPLY MODE: this will overwrite {{ motorcade_web_root }}/wp-content"
+          read -r -p "Type APPLY to continue: " CONFIRM
+          if [[ "${CONFIRM}" != "APPLY" ]]; then
+            echo "Aborted."; exit 1
+          fi
+
+          echo "[motorcade] syncing wp-content into place..."
+          rsync -a --delete "${STAGE}/wp-content/" "{{ motorcade_web_root }}/wp-content/"
+
+          # Optional DB restore
+          if [[ -n "${DB_GZ}" ]]; then
+            echo "[motorcade] db dump found: ${DB_GZ}"
+            read -r -p "Restore DB too? Type YES to restore {{ wp_db_name }}: " DBYES
+            if [[ "${DBYES}" == "YES" ]]; then
+              echo "[motorcade] restoring database {{ wp_db_name }}..."
+              gunzip -c "${DB_GZ}" | mysql --defaults-extra-file=/root/.my.cnf "{{ wp_db_name }}"
+              echo "[motorcade] DB restore complete."
+            else
+              echo "[motorcade] DB restore skipped."
+            fi
+          else
+            echo "[motorcade] No db dump found; skipping DB restore."
+          fi
+
+          echo "[motorcade] restore complete: ${TS}"
+
+    - name: "Show restore usage"
+      ansible.builtin.debug:
+        msg:
+          - "Test restore: sudo {{ motorcade_restore_script_path }} --backup-dir /var/backups/motorcade/YYYY/MM/DD --mode test"
+          - "Apply restore: sudo {{ motorcade_restore_script_path }} --backup-dir /var/backups/motorcade/YYYY/MM/DD --mode apply"
+          - "Logs: {{ motorcade_restore_log_dir }}"

@@ -1,0 +1,157 @@
+---
+- name: "Motorcade Playbook 15 - Asset Inventory & Ownership (read-only)"
+  hosts: motorcade
+  become: true
+  gather_facts: true
+
+  vars:
+    motorcade_web_root: "/var/www/motorcade"
+    motorcade_nginx_root: "/etc/nginx"
+    motorcade_log_root: "/var/log/motorcade"
+    motorcade_inventory_dir: "/var/log/motorcade/inventory"
+
+  tasks:
+    - name: "Ensure inventory log directory exists"
+      ansible.builtin.file:
+        path: "{{ motorcade_inventory_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: "Create timestamp for inventory artifact"
+      ansible.builtin.set_fact:
+        inv_ts: "{{ ansible_date_time.year }}{{ ansible_date_time.month }}{{ ansible_date_time.day }}-{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}"
+
+    - name: "Define inventory artifact file path"
+      ansible.builtin.set_fact:
+        inv_file: "{{ motorcade_inventory_dir }}/asset-inventory-{{ inv_ts }}.txt"
+
+    - name: "Record header"
+      ansible.builtin.copy:
+        dest: "{{ inv_file }}"
+        owner: root
+        group: root
+        mode: "0640"
+        content: |
+          MOTORCADE PLAYBOOK 15 — ASSET INVENTORY & OWNERSHIP (READ-ONLY)
+          Timestamp: {{ inv_ts }}
+          Host: {{ inventory_hostname }}
+          Web Root: {{ motorcade_web_root }}
+          Nginx Root: {{ motorcade_nginx_root }}
+          ------------------------------------------------------------
+
+    - name: "Sanity check web root exists"
+      ansible.builtin.stat:
+        path: "{{ motorcade_web_root }}"
+      register: webroot_stat
+
+    - name: "Fail if web root missing (do not proceed)"
+      ansible.builtin.fail:
+        msg: "Web root {{ motorcade_web_root }} does not exist. Aborting."
+      when: not webroot_stat.stat.exists
+
+    - name: "Collect directory inventory (depth 3)"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo
+        echo "== DIRECTORIES (maxdepth 3) =="
+        find "{{ motorcade_web_root }}" -maxdepth 3 -type d -print
+      args:
+        executable: /bin/bash
+      register: dirs_out
+      changed_when: false
+
+    - name: "Append directory inventory"
+      ansible.builtin.lineinfile:
+        path: "{{ inv_file }}"
+        line: "{{ item }}"
+        insertafter: EOF
+      loop: "{{ dirs_out.stdout_lines }}"
+
+    - name: "Collect file inventory (depth 2)"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo
+        echo "== FILES (maxdepth 2) =="
+        find "{{ motorcade_web_root }}" -maxdepth 2 -type f -print
+      args:
+        executable: /bin/bash
+      register: files_out
+      changed_when: false
+
+    - name: "Append file inventory"
+      ansible.builtin.lineinfile:
+        path: "{{ inv_file }}"
+        line: "{{ item }}"
+        insertafter: EOF
+      loop: "{{ files_out.stdout_lines }}"
+
+    - name: "Collect ownership snapshot (top level + wp-content)"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo
+        echo "== OWNERSHIP (ls -lah) web root =="
+        ls -lah "{{ motorcade_web_root }}"
+        echo
+        echo "== OWNERSHIP (ls -lah) wp-content =="
+        ls -lah "{{ motorcade_web_root }}/wp-content" || true
+      args:
+        executable: /bin/bash
+      register: owner_out
+      changed_when: false
+
+    - name: "Append ownership snapshot"
+      ansible.builtin.lineinfile:
+        path: "{{ inv_file }}"
+        line: "{{ item }}"
+        insertafter: EOF
+      loop: "{{ owner_out.stdout_lines }}"
+
+    - name: "Collect nginx references to root/maintenance"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo
+        echo "== NGINX REFERENCES: root directives =="
+        grep -R --line-number --no-messages "root " "{{ motorcade_nginx_root }}" || true
+        echo
+        echo "== NGINX REFERENCES: maintenance =="
+        grep -R --line-number --no-messages "maintenance" "{{ motorcade_nginx_root }}" || true
+      args:
+        executable: /bin/bash
+      register: nginx_refs
+      changed_when: false
+
+    - name: "Append nginx references"
+      ansible.builtin.lineinfile:
+        path: "{{ inv_file }}"
+        line: "{{ item }}"
+        insertafter: EOF
+      loop: "{{ nginx_refs.stdout_lines }}"
+
+    - name: "Optional: SHA256 manifest for wp-content themes/plugins only"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo
+        echo "== OPTIONAL MANIFEST: wp-content/themes + wp-content/plugins (sha256) =="
+        if [ -d "{{ motorcade_web_root }}/wp-content" ]; then
+          ( cd "{{ motorcade_web_root }}/wp-content" && \
+            find themes plugins -type f 2>/dev/null | sort | xargs -r sha256sum )
+        else
+          echo "wp-content not found."
+        fi
+      args:
+        executable: /bin/bash
+      register: manifest_out
+      changed_when: false
+
+    - name: "Append sha256 manifest"
+      ansible.builtin.lineinfile:
+        path: "{{ inv_file }}"
+        line: "{{ item }}"
+        insertafter: EOF
+      loop: "{{ manifest_out.stdout_lines }}"
+
+    - name: "Report artifact path"
+      ansible.builtin.debug:
+        msg: "Asset inventory artifact written to: {{ inv_file }}"
