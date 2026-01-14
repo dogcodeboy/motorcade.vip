@@ -31,3 +31,15 @@ If you are resuming work, start there.
 - Canonical asset folder tree: `motorcade-assets/`
 
 If chat history conflicts with these documents, these documents win.
+
+## Operations & Maintenance
+
+- 🔧 Maintenance Mode  
+  docs/MAINTENANCE_MODE.md
+
+- 📸 System Checkpoints  
+  docs/checkpoints/
+
+- 💾 Backups & Recovery (Playbooks 16–17)  
+  docs/playbooks/16-BACKUPS.md  
+  docs/playbooks/17-RESTORE-DR.md
