@@ -7,7 +7,7 @@
     motorcade_maintenance_enabled: true
     motorcade_maintenance_allow_ips: []
 
-    motorcade_web_root: "/var/www/html"
+    motorcade_web_root: "/var/www/motorcade"
     motorcade_maintenance_root: "/var/www/motorcade/maintenance"
     motorcade_nginx_conf_dir: "/etc/nginx/conf.d"
 

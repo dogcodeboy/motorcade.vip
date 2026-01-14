@@ -1,5 +1,42 @@
 ---
+
 - name: Reload nginx
-  ansible.builtin.service:
-    name: nginx
-    state: reloaded
+  become: true
+  block:
+    - name: Validate nginx config
+      command: nginx -t
+      register: _nginx_test
+      changed_when: false
+
+    - name: Reload nginx
+      service:
+        name: nginx
+        state: reloaded
+
+  rescue:
+    # When reload fails, surface the real reason immediately.
+    - name: Show nginx status
+      command: systemctl status nginx --no-pager
+      register: _nginx_status
+      changed_when: false
+      failed_when: false
+
+    - name: Show nginx journal
+      command: journalctl -xeu nginx --no-pager -n 120
+      register: _nginx_journal
+      changed_when: false
+      failed_when: false
+
+    - name: Fail with nginx diagnostics
+      fail:
+        msg: |
+          nginx reload failed.
+
+          nginx -t:
+          {{ _nginx_test.stderr | default(_nginx_test.stdout) | default('') }}
+
+          systemctl status nginx:
+          {{ _nginx_status.stdout | default('') }}
+
+          journalctl -xeu nginx:
+          {{ _nginx_journal.stdout | default('') }}

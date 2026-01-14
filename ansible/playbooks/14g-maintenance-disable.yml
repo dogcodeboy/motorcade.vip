@@ -1,0 +1,14 @@
+---
+- name: Motorcade | 14g | Disable maintenance mode
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    motorcade_maintenance_enabled: false
+
+    motorcade_web_root: "/var/www/motorcade"
+    motorcade_maintenance_root: "/var/www/motorcade/maintenance"
+    motorcade_nginx_conf_dir: "/etc/nginx/conf.d"
+
+  roles:
+    - role: motorcade_maintenance

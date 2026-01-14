@@ -1,71 +1,137 @@
 ---
+
+# Motorcade maintenance mode
+#
+# Design:
+# - We DO NOT drop `location {}` blocks directly into /etc/nginx/conf.d because
+#   those files are included in the `http {}` context on Amazon Linux 2023.
+# - Instead, we:
+#   1) Deploy a server-context snippet to /etc/nginx/snippets/motorcade-maintenance.conf
+#   2) Ensure your site server blocks include that snippet
+#   3) Insert a small gate at the top of `location /`:
+#        if (-f /etc/nginx/.motorcade_maintenance_on) { return 503; }
+#   4) Toggle by creating/removing the flag file (no config edits required).
+
+- name: Set defaults
+  set_fact:
+    motorcade_maintenance_enabled: "{{ motorcade_maintenance_enabled | default(true) }}"
+    motorcade_nginx_conf_dir: "{{ motorcade_nginx_conf_dir | default('/etc/nginx/conf.d') }}"
+    motorcade_nginx_site_confs: "{{ motorcade_nginx_site_confs | default(['motorcade.conf','motorcade-ssl.conf']) }}"
+    motorcade_nginx_snippets_dir: "{{ motorcade_nginx_snippets_dir | default('/etc/nginx/snippets') }}"
+    motorcade_maintenance_flag_file: "{{ motorcade_maintenance_flag_file | default('/etc/nginx/.motorcade_maintenance_on') }}"
+
 - name: Ensure maintenance directory exists
-  ansible.builtin.file:
-    path: "{{ motorcade_maintenance_root }}"
+  become: true
+  file:
+    path: "{{ motorcade_web_root }}/maintenance"
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: "0755"
+
+- name: Deploy maintenance index.html
+  become: true
+  template:
+    src: maintenance.html.j2
+    dest: "{{ motorcade_web_root }}/maintenance/index.html"
+    owner: nginx
+    group: nginx
+    mode: "0644"
+  notify: Reload nginx
+
+# --- nginx config wiring (server-context safe) ---
+
+- name: Ensure nginx snippets directory exists
+  become: true
+  file:
+    path: "{{ motorcade_nginx_snippets_dir }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
 
-- name: Deploy maintenance index.html
-  ansible.builtin.template:
-    src: maintenance.html.j2
-    dest: "{{ motorcade_maintenance_root }}/index.html"
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Deploy nginx maintenance config (503)
-  ansible.builtin.template:
-    src: nginx-maintenance.conf.j2
-    dest: "{{ motorcade_nginx_conf_dir }}/motorcade-maintenance.conf"
+- name: Deploy maintenance snippet
+  become: true
+  template:
+    src: motorcade-maintenance-snippet.conf.j2
+    dest: "{{ motorcade_nginx_snippets_dir }}/motorcade-maintenance.conf"
     owner: root
     group: root
     mode: "0644"
   notify: Reload nginx
-  when: motorcade_maintenance_enabled | bool
 
-- name: Remove nginx maintenance config if disabled
-  ansible.builtin.file:
+- name: Remove legacy invalid maintenance conf (http-context)
+  become: true
+  file:
     path: "{{ motorcade_nginx_conf_dir }}/motorcade-maintenance.conf"
     state: absent
   notify: Reload nginx
+
+- name: Ensure server blocks include maintenance snippet
+  become: true
+  lineinfile:
+    path: "{{ motorcade_nginx_conf_dir }}/{{ item }}"
+    regexp: '^\s*include\s+{{ motorcade_nginx_snippets_dir | regex_escape() }}/motorcade-maintenance\.conf;\s*$'
+    line: "  include {{ motorcade_nginx_snippets_dir }}/motorcade-maintenance.conf;"
+    insertafter: '^\s*index\s+'
+    create: false
+  loop: "{{ motorcade_nginx_site_confs }}"
+  notify: Reload nginx
+
+- name: Ensure maintenance gate exists in location / block
+  become: true
+  blockinfile:
+    path: "{{ motorcade_nginx_conf_dir }}/{{ item }}"
+    marker: "# {mark} MOTORCADE_MAINTENANCE_GATE"
+    insertafter: '^\s*location\s+/\s*\{'
+    block: |
+      # Motorcade maintenance gate (toggle via flag file)
+      if (-f {{ motorcade_maintenance_flag_file }}) { return 503; }
+    create: false
+  loop: "{{ motorcade_nginx_site_confs }}"
+  notify: Reload nginx
+
+# --- Toggle flag file ---
+
+- name: Enable maintenance mode (create flag file)
+  become: true
+  file:
+    path: "{{ motorcade_maintenance_flag_file }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0644"
+  when: motorcade_maintenance_enabled | bool
+  notify: Reload nginx
+
+- name: Disable maintenance mode (remove flag file)
+  become: true
+  file:
+    path: "{{ motorcade_maintenance_flag_file }}"
+    state: absent
   when: not (motorcade_maintenance_enabled | bool)
+  notify: Reload nginx
 
-- name: Check theme zip exists on controller
-  ansible.builtin.stat:
-    path: "{{ motorcade_trust_theme_zip_local }}"
-  delegate_to: localhost
-  run_once: true
-  register: trust_zip
-
-- name: Fail if theme zip missing on controller
-  ansible.builtin.fail:
-    msg: "Trust theme zip not found on controller at {{ motorcade_trust_theme_zip_local }}."
-  when: not trust_zip.stat.exists
+# --- Theme activation (optional) ---
 
 - name: Copy trust theme zip to server
-  ansible.builtin.copy:
-    src: "{{ motorcade_trust_theme_zip_local }}"
+  become: true
+  copy:
+    src: "{{ motorcade_theme_zip_src }}"
     dest: "/tmp/motorcade-trust-theme.zip"
     mode: "0644"
+  when: motorcade_theme_zip_src is defined
 
 - name: Verify wp-cli exists
-  ansible.builtin.stat:
-    path: "{{ motorcade_wp_cli }}"
-  register: wpcli
-
-- name: Fail if wp-cli missing
-  ansible.builtin.fail:
-    msg: "wp-cli not found at {{ motorcade_wp_cli }}."
-  when: not wpcli.stat.exists
+  command: "{{ motorcade_wp_cli }} --info"
+  changed_when: false
 
 - name: Install + activate Trust theme
+  become: true
   command: >
     {{ motorcade_wp_cli }} theme install /tmp/motorcade-trust-theme.zip
     --activate
     --force
     --path={{ motorcade_wp_path }}
     --allow-root
-  become: true
-
+  when: motorcade_theme_zip_src is defined

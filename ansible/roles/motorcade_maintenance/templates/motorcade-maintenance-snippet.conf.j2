@@ -1,0 +1,22 @@
+# Motorcade maintenance helpers (included inside server blocks)
+#
+# NOTE: The 503 decision gate lives in the main `location /` block via:
+#   if (-f {{ motorcade_maintenance_flag_file }}) { return 503; }
+# This snippet only provides the error_page handler and safe bypass locations.
+
+# Serve the custom maintenance page for 503 responses
+error_page 503 @motorcade_maintenance;
+
+location @motorcade_maintenance {
+  root {{ motorcade_maintenance_root }};
+  rewrite ^ /index.html break;
+}
+
+# Keep WP admin reachable during maintenance (so you can log in)
+location = /wp-admin {
+  return 301 /wp-admin/;
+}
+
+location ^~ /wp-admin/ {
+  try_files $uri $uri/ /wp-admin/index.php?$args;
+}
