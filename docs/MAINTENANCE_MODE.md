@@ -1,5 +1,14 @@
 # Motorcade Maintenance Mode
 
+## 🚨 Quick Toggle (Production)
+
+### Enable maintenance
+```bash
+sudo touch /etc/nginx/motorcade_maintenance_on
+sudo nginx -t && sudo systemctl reload nginx
+
+# Motorcade Maintenance Mode
+
 This document explains how to safely enable and disable **Maintenance Mode**
 for the Motorcade platform.
 
