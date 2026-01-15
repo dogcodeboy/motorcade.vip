@@ -1,0 +1,293 @@
+---
+- name: "Playbook 30 - Branding: Logo assets + Customizer toggle"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_path: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_path }}/wp-content/themes/{{ theme_slug }}"
+
+    uploads_brand_dir: "{{ wp_path }}/wp-content/uploads/motorcade/branding"
+    brand_url_base: "https://motorcade.vip/wp-content/uploads/motorcade/branding"
+
+    # Local repo asset source directory (relative to ansible/)
+    repo_brand_assets: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/branding"
+
+  tasks:
+    - name: Assert theme directory exists
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_stat
+
+    - name: Fail if theme directory missing
+      ansible.builtin.fail:
+        msg: "Theme directory not found: {{ theme_dir }}"
+      when: not theme_stat.stat.exists
+
+    - name: Ensure uploads branding directory exists
+      ansible.builtin.file:
+        path: "{{ uploads_brand_dir }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0755"
+
+    - name: Upload branding image assets to wp-content/uploads (idempotent)
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ uploads_brand_dir }}/{{ item | basename }}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+      with_fileglob:
+        - "{{ repo_brand_assets }}/*.png"
+
+    - name: Verify wp-cli exists
+      ansible.builtin.command: wp --info
+      args:
+        chdir: "{{ wp_path }}"
+      become_user: nginx
+      changed_when: false
+
+    - name: Ensure functions.php exists
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}/functions.php"
+      register: functions_stat
+
+    - name: Fail if functions.php missing
+      ansible.builtin.fail:
+        msg: "Missing theme functions.php at {{ theme_dir }}/functions.php"
+      when: not functions_stat.stat.exists
+
+    - name: Ensure style.css exists
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}/style.css"
+      register: style_stat
+
+    - name: Fail if style.css missing
+      ansible.builtin.fail:
+        msg: "Missing theme style.css at {{ theme_dir }}/style.css"
+      when: not style_stat.stat.exists
+
+    - name: Import header logos + badge to Media Library (idempotent-ish)
+      ansible.builtin.command: >
+        wp --path={{ wp_path }} media import
+        {{ uploads_brand_dir }}/motorcade-header-logo-light.png
+        {{ uploads_brand_dir }}/motorcade-header-logo-dark.png
+        {{ uploads_brand_dir }}/motorcade-badge-256.png
+        --porcelain
+      become_user: nginx
+      register: media_import
+      changed_when: false
+      failed_when: false
+
+    - name: Add Motorcade Branding Customizer controls + render helpers + brandbar (idempotent)
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/functions.php"
+        marker: "// MOTORCADE_BRAND_CUSTOMIZER {mark}"
+        insertafter: EOF
+        block: |
+          /**
+           * Motorcade Branding — Logo Variant Toggle + Brand Bar
+           * Managed by Ansible (Playbook 30). Do not edit inside markers.
+           */
+          add_action('customize_register', function($wp_customize) {
+            $section = 'motorcade_branding';
+
+            if (!$wp_customize->get_section($section)) {
+              $wp_customize->add_section($section, [
+                'title'       => 'Motorcade Branding',
+                'priority'    => 25,
+                'description' => 'Choose which logo style to display (badge vs wordmark).',
+              ]);
+            }
+
+            // Variant toggle
+            $wp_customize->add_setting('motorcade_logo_variant', [
+              'default'           => 'badge',
+              'sanitize_callback' => function($v){
+                return in_array($v, ['badge','wordmark'], true) ? $v : 'badge';
+              }
+            ]);
+
+            $wp_customize->add_control('motorcade_logo_variant', [
+              'type'    => 'radio',
+              'section' => $section,
+              'label'   => 'Logo style',
+              'choices' => [
+                'badge'    => 'Badge (shield)',
+                'wordmark' => 'Wordmark (text)',
+              ]
+            ]);
+
+            // Optional: show always-on brand bar (recommended for trust/recognition)
+            $wp_customize->add_setting('motorcade_brandbar_enabled', [
+              'default'           => true,
+              'sanitize_callback' => function($v){ return (bool)$v; }
+            ]);
+            $wp_customize->add_control('motorcade_brandbar_enabled', [
+              'type'    => 'checkbox',
+              'section' => $section,
+              'label'   => 'Show Brand Bar (logo + name in header)',
+            ]);
+
+            // Badge URL (image control)
+            $wp_customize->add_setting('motorcade_logo_badge_url', [
+              'default'           => '{{ brand_url_base }}/motorcade-badge-64.png',
+              'sanitize_callback' => 'esc_url_raw',
+            ]);
+            $wp_customize->add_control(new WP_Customize_Image_Control($wp_customize, 'motorcade_logo_badge_url', [
+              'label'   => 'Badge image (default: 64px)',
+              'section' => $section,
+              'settings'=> 'motorcade_logo_badge_url',
+            ]));
+
+            // Wordmark URL (image control)
+            $wp_customize->add_setting('motorcade_logo_wordmark_url', [
+              'default'           => '{{ brand_url_base }}/motorcade-wordmark-dark.png',
+              'sanitize_callback' => 'esc_url_raw',
+            ]);
+            $wp_customize->add_control(new WP_Customize_Image_Control($wp_customize, 'motorcade_logo_wordmark_url', [
+              'label'   => 'Wordmark image',
+              'section' => $section,
+              'settings'=> 'motorcade_logo_wordmark_url',
+            ]));
+
+            // Combo header logo (badge + wordmark)
+            $wp_customize->add_setting('motorcade_logo_header_combo_url', [
+              'default'           => '{{ brand_url_base }}/motorcade-header-logo-light.png',
+              'sanitize_callback' => 'esc_url_raw',
+            ]);
+            $wp_customize->add_control(new WP_Customize_Image_Control($wp_customize, 'motorcade_logo_header_combo_url', [
+              'label'   => 'Header combo (badge + wordmark)',
+              'section' => $section,
+              'settings'=> 'motorcade_logo_header_combo_url',
+            ]));
+          });
+
+          /**
+           * Render selected Motorcade logo variant.
+           */
+          function motorcade_brand_logo_html($args = []) {
+            $defaults = [
+              'class'        => 'mc-brand-logo',
+              'alt'          => 'Motorcade Security Solutions',
+              'prefer_combo' => true,
+            ];
+            $args = array_merge($defaults, is_array($args) ? $args : []);
+
+            $variant = get_theme_mod('motorcade_logo_variant', 'badge');
+            $badge   = get_theme_mod('motorcade_logo_badge_url', '{{ brand_url_base }}/motorcade-badge-64.png');
+            $word    = get_theme_mod('motorcade_logo_wordmark_url', '{{ brand_url_base }}/motorcade-wordmark-dark.png');
+            $combo   = get_theme_mod('motorcade_logo_header_combo_url', '{{ brand_url_base }}/motorcade-header-logo-light.png');
+
+            if (!empty($args['prefer_combo']) && !empty($combo)) {
+              $src = esc_url($combo);
+              return '<img class="'.esc_attr($args['class']).'" src="'.$src.'" alt="'.esc_attr($args['alt']).'" loading="eager" decoding="async" />';
+            }
+
+            $src = ($variant === 'wordmark') ? $word : $badge;
+            $src = esc_url($src);
+            return '<img class="'.esc_attr($args['class']).'" src="'.$src.'" alt="'.esc_attr($args['alt']).'" loading="eager" decoding="async" />';
+          }
+
+          /**
+           * Brand Bar: guarantees visible branding even if theme header doesn't output the Custom Logo.
+           */
+          add_action('wp_body_open', function(){
+            if (!get_theme_mod('motorcade_brandbar_enabled', true)) return;
+
+            $logo = motorcade_brand_logo_html(['class' => 'mc-brand-logo mc-brand-logo--bar', 'prefer_combo' => true]);
+            $home = esc_url(home_url('/'));
+            echo '<div class="mc-brandbar" role="banner">'
+               . '<a class="mc-brandbar__link" href="'.$home.'" rel="home" aria-label="Motorcade">'
+               . $logo
+               . '<span class="mc-brandbar__name">Motorcade Security Solutions</span>'
+               . '</a>'
+               . '</div>';
+          }, 5);
+
+          // If the theme uses the WordPress Custom Logo, replace it with our selected asset.
+          add_filter('get_custom_logo', function($html){
+            $variant = get_theme_mod('motorcade_logo_variant', '');
+            if (!$variant) return $html;
+
+            $logo = motorcade_brand_logo_html(['class' => 'custom-logo', 'prefer_combo' => true]);
+            $home = esc_url(home_url('/'));
+            return '<a href="'.$home.'" class="custom-logo-link" rel="home" aria-label="Motorcade">'.$logo.'</a>';
+          }, 20);
+
+    - name: Append Motorcade brand logo CSS (idempotent)
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/style.css"
+        marker: "/* MOTORCADE_BRAND_LOGO_CSS {mark} */"
+        insertafter: EOF
+        block: |
+          /* === Motorcade Branding (Ansible-managed) === */
+          .mc-brandbar {
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            background: #ffffff;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+          }
+          .mc-brandbar__link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            text-decoration: none;
+          }
+          .mc-brandbar__name {
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            color: #0f172a;
+            font-size: 14px;
+            line-height: 1;
+            white-space: nowrap;
+          }
+          .mc-brand-logo, .custom-logo {
+            height: 40px;
+            width: auto;
+            max-width: 260px;
+          }
+          .mc-brand-logo--bar { height: 34px; }
+          @media (min-width: 768px) {
+            .mc-brand-logo, .custom-logo { height: 44px; }
+            .mc-brand-logo--bar { height: 36px; }
+            .mc-brandbar__name { font-size: 15px; }
+          }
+
+    - name: Set default theme mods (variant + URLs) (idempotent)
+      ansible.builtin.command: >
+        wp --path={{ wp_path }} theme mod set {{ item.key }} {{ item.value }}
+      become_user: nginx
+      loop:
+        - { key: motorcade_logo_variant, value: badge }
+        - { key: motorcade_logo_badge_url, value: "{{ brand_url_base }}/motorcade-badge-64.png" }
+        - { key: motorcade_logo_wordmark_url, value: "{{ brand_url_base }}/motorcade-wordmark-dark.png" }
+        - { key: motorcade_logo_header_combo_url, value: "{{ brand_url_base }}/motorcade-header-logo-light.png" }
+        - { key: motorcade_brandbar_enabled, value: 1 }
+      changed_when: false
+      failed_when: false
+
+    - name: Reload php-fpm
+      ansible.builtin.service:
+        name: php-fpm
+        state: reloaded
+      ignore_errors: true
+
+    - name: Reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      ignore_errors: true
+
+    - name: Print summary
+      ansible.builtin.debug:
+        msg:
+          - "Uploaded logo assets to: {{ uploads_brand_dir }}"
+          - "Customizer: Appearance → Customize → Motorcade Branding → Logo style"
+          - "Brand Bar enabled by default to ensure visible branding even if header template doesn't render custom logo."
+          - "Homepage: https://motorcade.vip"

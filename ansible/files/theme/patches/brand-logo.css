@@ -1,0 +1,9 @@
+/* === Motorcade Branding (Ansible-managed) === */
+.mc-brand-logo, .custom-logo {
+  height: 40px;
+  width: auto;
+  max-width: 220px;
+}
+@media (min-width: 768px) {
+  .mc-brand-logo, .custom-logo { height: 44px; max-width: 260px; }
+}
