@@ -1,0 +1,108 @@
+- name: 'Playbook 31 - Homepage Trust Polish (Phase 1): Fix Site Icon + Header Wordmark'
+  hosts: motorcade_web
+  become: true
+  vars:
+    wp_path: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: '{{ wp_path }}/wp-content/themes/{{ theme_slug }}'
+    uploads_brand_dir: '{{ wp_path }}/wp-content/uploads/motorcade/branding'
+    repo_brand_assets: '{{ playbook_dir }}/../files/wp/assets/images/motorcade/branding'
+    header_logo_file: motorcade-header-logo-light.png
+    site_icon_file: motorcade-site-icon-512.png
+  tasks:
+  - name: Ensure branding uploads directory exists
+    ansible.builtin.file:
+      path: '{{ uploads_brand_dir }}'
+      state: directory
+      owner: nginx
+      group: nginx
+      mode: '0755'
+  - name: Copy canonical branding assets into uploads (repo-managed)
+    ansible.builtin.copy:
+      src: '{{ repo_brand_assets }}/{{ item }}'
+      dest: '{{ uploads_brand_dir }}/{{ item }}'
+      owner: nginx
+      group: nginx
+      mode: '0644'
+    loop:
+    - '{{ header_logo_file }}'
+    - '{{ site_icon_file }}'
+  - name: Verify wp-cli exists
+    ansible.builtin.command: wp --info
+    args:
+      chdir: '{{ wp_path }}'
+    become_user: nginx
+    changed_when: false
+  - name: Lookup existing Media Library attachment ID for header logo
+    ansible.builtin.command: 'wp --path={{ wp_path }} media list --post_mime_type=image --search="{{ header_logo_file }}"
+      --field=ID --format=ids
+
+      '
+    args:
+      chdir: '{{ wp_path }}'
+    become_user: nginx
+    register: header_logo_ids
+    changed_when: false
+  - name: Import header logo into Media Library if missing
+    ansible.builtin.command: 'wp --path={{ wp_path }} media import {{ uploads_brand_dir }}/{{ header_logo_file }} --porcelain
+
+      '
+    args:
+      chdir: '{{ wp_path }}'
+    become_user: nginx
+    register: header_logo_import
+    when: (header_logo_ids.stdout | trim) == ""
+    changed_when: false
+  - name: Set header logo attachment id fact
+    ansible.builtin.set_fact:
+      header_logo_id: '{{ (header_logo_ids.stdout | trim) if (header_logo_ids.stdout | trim) != '''' else (header_logo_import.stdout
+        | trim) }}'
+  - name: Lookup existing Media Library attachment ID for site icon
+    ansible.builtin.command: 'wp --path={{ wp_path }} media list --post_mime_type=image --search="{{ site_icon_file }}" --field=ID
+      --format=ids
+
+      '
+    args:
+      chdir: '{{ wp_path }}'
+    become_user: nginx
+    register: site_icon_ids
+    changed_when: false
+  - name: Import site icon into Media Library if missing
+    ansible.builtin.command: 'wp --path={{ wp_path }} media import {{ uploads_brand_dir }}/{{ site_icon_file }} --porcelain
+
+      '
+    args:
+      chdir: '{{ wp_path }}'
+    become_user: nginx
+    register: site_icon_import
+    when: (site_icon_ids.stdout | trim) == ""
+    changed_when: false
+  - name: Set site icon attachment id fact
+    ansible.builtin.set_fact:
+      site_icon_id: '{{ (site_icon_ids.stdout | trim) if (site_icon_ids.stdout | trim) != '''' else (site_icon_import.stdout
+        | trim) }}'
+  - name: Ensure WordPress header uses our custom logo (enables has_custom_logo)
+    ansible.builtin.command: 'wp --path={{ wp_path }} theme mod set custom_logo {{ header_logo_id }}
+
+      '
+    args:
+      chdir: '{{ wp_path }}'
+    become_user: nginx
+    changed_when: false
+  - name: Set WordPress Site Icon (favicon/app icon) to Motorcade badge
+    ansible.builtin.command: 'wp --path={{ wp_path }} option update site_icon {{ site_icon_id }}
+
+      '
+    args:
+      chdir: '{{ wp_path }}'
+    become_user: nginx
+    changed_when: false
+  - name: Flush rewrite rules (safe) and clear object cache if present
+    ansible.builtin.command: 'wp --path={{ wp_path }} rewrite flush --hard
+
+      '
+    args:
+      chdir: '{{ wp_path }}'
+    become_user: nginx
+    changed_when: false
+    failed_when: false
