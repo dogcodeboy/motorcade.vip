@@ -1,0 +1,1 @@
+<?php get_header(); ?><section class='mc-section'><h1>Page not found</h1><p>That page doesn’t exist.</p></section><?php get_footer(); ?>
