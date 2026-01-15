@@ -1,0 +1,18 @@
+{
+  "package": "motorcade-phase1-assets",
+  "version": "1.0.0",
+  "notes": "Phase 1 non-logo assets: SVG icon set, trust badges, dividers, subtle backgrounds, and portal empty-state illustrations (no people). All icons use currentColor for easy CSS theming.",
+  "folders": {
+    "icons/svg": "Line icons (24x24 viewBox) stroke=currentColor.",
+    "badges/svg": "Trust badges (320x96) for homepage cards or footer strip.",
+    "dividers/svg": "Section wave dividers for page breaks.",
+    "backgrounds/web": "Subtle gradient+noise backgrounds in PNG+WEBP.",
+    "portal/empty_states": "Custom illustrations for Ops/Employee/Docs/Dispatch empty states in PNG+WEBP."
+  },
+  "recommended_sizes": {
+    "icons": "Use inline SVG or <img> at 20-28px (mobile) / 24-32px (desktop).",
+    "badges": "320x96 or scale down proportionally; keep min height 48px.",
+    "backgrounds": "Prefer WEBP; fall back to PNG.",
+    "empty_states": "Use 1200x675 for cards/modals; 1600x900 for full sections."
+  }
+}

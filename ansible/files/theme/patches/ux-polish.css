@@ -1,0 +1,37 @@
+/* Motorcade Trust — UX polish (Playbook 28)
+   Overrides only. Keep changes calm, readable, and conversion‑first.
+*/
+
+.mc-site { background: #070a10; color: #e9eef7; }
+
+/* Hero: calmer hierarchy, less “wall of dark” */
+.mc-hero { padding: 96px 0 56px; }
+.mc-kicker { font-weight: 700; opacity: .9; }
+.mc-hero__title { max-width: 20ch; }
+.mc-hero__subtitle { max-width: 58ch; opacity: .92; }
+
+/* Trust row: make badges feel like credentials, not decorations */
+.mc-badges { margin-top: 22px; }
+.mc-badge { background: rgba(255,255,255,.075); border-color: rgba(255,255,255,.13); }
+.mc-badge:hover { filter: brightness(1.06); }
+
+/* Section rhythm: slightly brighter mid‑page to avoid “black wall” */
+.mc-section { padding: 64px 0; }
+.mc-section--muted { background: rgba(255,255,255,.055); }
+
+/* Service cards: more readable, less “flat dark boxes” */
+.mc-card { background: rgba(255,255,255,.075); border-color: rgba(255,255,255,.14); }
+.mc-card__body h3 { font-size: 19px; }
+.mc-card__body p { opacity: .92; }
+
+/* Split section readability */
+.mc-split { gap: 28px; }
+.mc-list li { opacity: .95; }
+
+/* CTA: keep strong but not shouty */
+.mc-cta { padding: 72px 0; }
+
+@media (max-width: 920px) {
+  .mc-hero { padding: 78px 0 44px; }
+  .mc-hero__title { max-width: 26ch; }
+}

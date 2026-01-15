@@ -1,0 +1,72 @@
+---
+- name: "Playbook 28b — Light Theme + Responsive Layout Polish"
+  hosts: motorcade_web
+  become: true
+  vars:
+    wp_root: /var/www/motorcade
+    theme_dir: /var/www/motorcade/wp-content/themes/motorcade-trust
+    local_front_page: "{{ playbook_dir }}/../files/theme/patches/front-page.ux.light.php"
+    local_css: "{{ playbook_dir }}/../files/theme/patches/ux-polish-light.css"
+
+  tasks:
+    - name: Assert WordPress root exists
+      ansible.builtin.stat:
+        path: "{{ wp_root }}"
+      register: wp_root_stat
+
+    - name: Fail if WordPress root not found
+      ansible.builtin.fail:
+        msg: "WordPress root not found at {{ wp_root }} (check deployment)"
+      when: not wp_root_stat.stat.exists
+
+    - name: Ensure theme directory exists
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_stat
+
+    - name: Fail if theme directory missing
+      ansible.builtin.fail:
+        msg: "Theme directory missing: {{ theme_dir }}"
+      when: not theme_stat.stat.exists
+
+    - name: Deploy refined front-page.php (light + responsive)
+      ansible.builtin.copy:
+        src: "{{ local_front_page }}"
+        dest: "{{ theme_dir }}/front-page.php"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+
+    - name: Ensure style.css exists
+      ansible.builtin.file:
+        path: "{{ theme_dir }}/style.css"
+        state: touch
+        owner: nginx
+        group: nginx
+        mode: "0644"
+
+    - name: Read UX polish CSS from controller
+      ansible.builtin.set_fact:
+        motorcade_ux_polish_css: "{{ lookup('ansible.builtin.file', local_css) }}"
+
+    - name: Inject UX polish CSS overrides (managed block)
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/style.css"
+        marker: "/* {mark} MOTORCADE_UX_POLISH */"
+        block: "{{ motorcade_ux_polish_css }}"
+        create: true
+      notify:
+        - reload php-fpm
+
+    - name: Print summary
+      ansible.builtin.debug:
+        msg:
+          - "Light + responsive UX polish applied to: {{ theme_dir }}/front-page.php"
+          - "CSS override block applied to: {{ theme_dir }}/style.css"
+          - "Verify homepage: https://motorcade.vip"
+
+  handlers:
+    - name: reload php-fpm
+      ansible.builtin.service:
+        name: php-fpm
+        state: reloaded

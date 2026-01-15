@@ -1,0 +1,49 @@
+/* Motorcade Trust — Presentation wiring (Playbook 27)
+   Keep CSS minimal and predictable. */
+
+.mc-site { background: #070a10; color: #e9eef7; }
+.mc-wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+.mc-hero { background-size: cover; background-position: center; padding: 92px 0 56px; }
+.mc-kicker { letter-spacing: .12em; text-transform: uppercase; opacity: .85; font-size: 12px; }
+.mc-hero__title { font-size: clamp(32px, 4vw, 52px); line-height: 1.05; margin: 10px 0 12px; }
+.mc-hero__subtitle { max-width: 62ch; font-size: 18px; opacity: .92; }
+.mc-hero__cta { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
+
+.mc-btn { display: inline-flex; align-items: center; justify-content: center; padding: 12px 16px; border-radius: 12px; font-weight: 700; text-decoration: none; }
+.mc-btn--primary { background: #2b6cff; color: #fff; }
+.mc-btn--ghost { border: 1px solid rgba(255,255,255,.22); color: #fff; background: rgba(255,255,255,.06); }
+.mc-btn:hover { filter: brightness(1.08); }
+
+.mc-badges { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 28px; max-width: 820px; }
+.mc-badge { width: 100%; height: 44px; object-fit: contain; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10); border-radius: 12px; padding: 10px; }
+
+.mc-section { padding: 56px 0; }
+.mc-section--muted { background: rgba(255,255,255,.04); border-top: 1px solid rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.06); }
+.mc-section__header h2 { margin: 0 0 10px; font-size: 32px; }
+.mc-section__header p { margin: 0; opacity: .9; max-width: 72ch; }
+
+.mc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
+.mc-card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10); border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.mc-card img { width: 100%; height: 190px; object-fit: cover; display: block; }
+.mc-card__body { padding: 16px; }
+.mc-card__body h3 { margin: 0 0 8px; font-size: 18px; }
+.mc-card__body p { margin: 0; opacity: .9; }
+
+.mc-split { display: grid; grid-template-columns: 1.1fr 1fr; gap: 22px; align-items: center; }
+.mc-split__media img { width: 100%; border-radius: 18px; border: 1px solid rgba(255,255,255,.10); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.mc-list { margin: 12px 0 0; padding-left: 18px; }
+.mc-list li { margin: 6px 0; opacity: .92; }
+
+.mc-cta { background-size: cover; background-position: center; padding: 64px 0; text-align: center; }
+.mc-cta h2 { margin: 0 0 10px; font-size: 34px; }
+.mc-cta p { margin: 0 auto 18px; max-width: 68ch; opacity: .92; }
+
+.mc-content { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); border-radius: 18px; padding: 18px; }
+
+@media (max-width: 920px) {
+  .mc-grid { grid-template-columns: 1fr; }
+  .mc-split { grid-template-columns: 1fr; }
+  .mc-badges { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mc-hero { padding: 72px 0 44px; }
+}

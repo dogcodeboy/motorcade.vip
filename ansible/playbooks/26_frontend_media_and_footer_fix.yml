@@ -106,7 +106,7 @@
       ansible.builtin.blockinfile:
         path: "{{ nginx_ssl_conf }}"
         marker: "# {mark} MOTORCADE_STATIC_UPLOADS"
-        insertafter: 'server {'
+        insertafter: "^server\\s*\\{"
         block: |
           # Serve uploaded media directly (avoid routing images through PHP)
           location ^~ /wp-content/uploads/ {
@@ -129,7 +129,7 @@
       ansible.builtin.blockinfile:
         path: "{{ nginx_http_conf }}"
         marker: "# {mark} MOTORCADE_STATIC_UPLOADS"
-        insertafter: 'server {'
+        insertafter: "^server\\s*\\{"
         block: |
           # Serve uploaded media directly (avoid routing images through PHP)
           location ^~ /wp-content/uploads/ {

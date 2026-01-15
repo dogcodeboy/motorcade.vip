@@ -1,0 +1,71 @@
+---
+- name: "Playbook 28 — UX & Psychological Alignment"
+  hosts: motorcade_web
+  become: true
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    patch_dir: "{{ playbook_dir }}/../files/theme/patches"
+    front_page_src: "{{ patch_dir }}/front-page.ux.php"
+    ux_css_src: "{{ patch_dir }}/ux-polish.css"
+
+  tasks:
+    - name: Assert WordPress root exists
+      ansible.builtin.stat:
+        path: "{{ wp_root }}/wp-config.php"
+      register: wp_cfg
+
+    - name: Fail if WordPress root not found
+      ansible.builtin.fail:
+        msg: "WordPress root not found at {{ wp_root }} (missing wp-config.php)"
+      when: not wp_cfg.stat.exists
+
+    - name: Ensure theme directory exists
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_stat
+
+    - name: Fail if theme directory missing
+      ansible.builtin.fail:
+        msg: "Theme directory missing: {{ theme_dir }}"
+      when: not theme_stat.stat.exists
+
+    - name: Deploy refined front-page.php (UX polish)
+      ansible.builtin.copy:
+        src: "{{ front_page_src }}"
+        dest: "{{ theme_dir }}/front-page.php"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+        backup: true
+
+    - name: Ensure style.css exists
+      ansible.builtin.file:
+        path: "{{ theme_dir }}/style.css"
+        state: touch
+        owner: nginx
+        group: nginx
+        mode: "0644"
+
+    - name: Inject UX polish CSS overrides (managed block)
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/style.css"
+        marker: "/* {mark} MOTORCADE_UX_POLISH */"
+        insertafter: EOF
+        block: "{{ lookup('file', ux_css_src) }}"
+      notify:
+        - reload php-fpm
+
+    - name: Print summary
+      ansible.builtin.debug:
+        msg:
+          - "UX polish applied to: {{ theme_dir }}/front-page.php"
+          - "CSS override block appended to: {{ theme_dir }}/style.css"
+          - "Verify homepage: https://motorcade.vip"
+
+  handlers:
+    - name: reload php-fpm
+      ansible.builtin.service:
+        name: php-fpm
+        state: reloaded

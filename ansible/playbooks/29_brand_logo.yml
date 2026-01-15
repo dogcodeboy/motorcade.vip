@@ -1,0 +1,147 @@
+---
+- name: Playbook 29 — Brand & Logo Integration (theme header + WP custom logo)
+  hosts: motorcade_web
+  become: true
+  vars:
+    wp_path: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_path }}/wp-content/themes/{{ theme_slug }}"
+    logo_src: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/motorcade-logo.png"
+    logo_dst_dir: "{{ theme_dir }}/assets/img"
+    logo_dst: "{{ logo_dst_dir }}/motorcade-logo.png"
+
+  handlers:
+    - name: reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
+    - name: reload php-fpm
+      ansible.builtin.service:
+        name: php-fpm
+        state: reloaded
+
+  tasks:
+    - name: Assert WordPress root exists
+      ansible.builtin.stat:
+        path: "{{ wp_path }}/wp-config.php"
+      register: wp_cfg
+    - name: Fail if WordPress root not found
+      ansible.builtin.fail:
+        msg: "WordPress not found at {{ wp_path }} (missing wp-config.php)"
+      when: not wp_cfg.stat.exists
+
+    - name: Ensure theme directory exists
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_stat
+    - name: Fail if theme directory missing
+      ansible.builtin.fail:
+        msg: "Theme directory missing: {{ theme_dir }}"
+      when: not theme_stat.stat.exists
+
+    - name: Ensure theme assets/img directory exists
+      ansible.builtin.file:
+        path: "{{ logo_dst_dir }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0755"
+
+    - name: Copy Motorcade logo into theme assets (idempotent)
+      ansible.builtin.copy:
+        src: "{{ logo_src }}"
+        dest: "{{ logo_dst }}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+
+    # ---- Header injection: add a branded mark that is resilient even if WP custom logo isn't set.
+    - name: Inject Motorcade brand/logo block into header.php (managed block)
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/header.php"
+        marker: "<!-- {mark} MOTORCADE_BRAND_HEADER -->"
+        insertafter: "<div class=\"site-branding\">"
+        block: |
+          <?php
+          /**
+           * Motorcade Brand Header (managed)
+           * Uses WP custom logo if set; falls back to theme asset logo.
+           */
+          ?>
+          <div class="mc-brand">
+            <a class="mc-brand__link" href="<?php echo esc_url(home_url('/')); ?>" aria-label="Motorcade Security Solutions">
+              <?php if (function_exists('has_custom_logo') && has_custom_logo()): ?>
+                <?php the_custom_logo(); ?>
+              <?php else: ?>
+                <img class="mc-brand__logo" src="<?php echo esc_url(get_stylesheet_directory_uri() . '/assets/img/motorcade-logo.png'); ?>" alt="Motorcade Security Solutions">
+              <?php endif; ?>
+              <span class="mc-brand__name"><?php echo esc_html(get_bloginfo('name')); ?></span>
+            </a>
+          </div>
+      notify:
+        - reload php-fpm
+
+    # ---- CSS: align with “mostly white + dark accents”, keep header clean and premium.
+    - name: Inject Motorcade branding CSS into style.css (managed block)
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/style.css"
+        marker: "/* {mark} MOTORCADE_BRANDING_CSS */"
+        block: |
+          /* Motorcade branding (managed) */
+          .site-header .site-branding { display: flex; align-items: center; gap: 14px; }
+          .mc-brand { display: flex; align-items: center; }
+          .mc-brand__link { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
+          .mc-brand__logo { height: 34px; width: auto; display: block; }
+          .custom-logo { height: 34px; width: auto; display: block; }
+          .mc-brand__name {
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            color: #0b1b2b;
+            font-size: 18px;
+            line-height: 1;
+            white-space: nowrap;
+          }
+          /* On smaller screens, keep it clean and avoid crowding nav */
+          @media (max-width: 900px) {
+            .mc-brand__name { font-size: 16px; }
+            .mc-brand__logo, .custom-logo { height: 30px; }
+          }
+          @media (max-width: 600px) {
+            .mc-brand__name { display: none; } /* logo-only for tight mobile headers */
+          }
+
+    # ---- WP custom logo setup: import logo and set theme mod so WP functions render it too.
+    - name: Check wp-cli exists
+      ansible.builtin.command: wp --info
+      args:
+        chdir: "{{ wp_path }}"
+      register: wpcli_info
+      changed_when: false
+      failed_when: false
+
+    - name: Import logo into Media Library and set as Custom Logo (wp-cli)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        # Import logo if not already imported; reuse existing attachment if present.
+        ATTACH_ID="$(sudo -u nginx wp --path={{ wp_path }} post list --post_type=attachment --posts_per_page=200 --format=csv --fields=ID,post_title,guid           | awk -F',' 'tolower($2) ~ /motorcade/ && tolower($3) ~ /motorcade-logo\.png/ {print $1; exit}')"
+        if [ -z "${ATTACH_ID}" ]; then
+          ATTACH_ID="$(sudo -u nginx wp --path={{ wp_path }} media import "{{ logo_dst }}" --porcelain)"
+        fi
+        # Set Custom Logo theme mod
+        sudo -u nginx wp --path={{ wp_path }} theme mod set custom_logo "${ATTACH_ID}"
+        echo "${ATTACH_ID}"
+      args:
+        chdir: "{{ wp_path }}"
+      register: custom_logo_set
+      changed_when: true
+      when: wpcli_info.rc == 0
+
+    - name: Print summary
+      ansible.builtin.debug:
+        msg:
+          - "Logo copied to: {{ logo_dst }}"
+          - "Header branding injected into: {{ theme_dir }}/header.php"
+          - "Branding CSS injected into: {{ theme_dir }}/style.css"
+          - "Custom logo attachment id (if wp-cli ran): {{ custom_logo_set.stdout | default('n/a') }}"
+          - "Verify: https://motorcade.vip (header should show logo/brand)"

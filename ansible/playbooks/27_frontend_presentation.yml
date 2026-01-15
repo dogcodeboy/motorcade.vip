@@ -1,0 +1,139 @@
+---
+# Playbook 27 — Frontend Presentation Wiring (Theme calls images + polished sections)
+# Purpose: Make the live site visually match the Motorcade mockup using existing assets in /wp-content/uploads/motorcade/
+# Scope: Theme template wiring only (front-page.php + style.css + footer DPS line). No manual WP edits required.
+
+- name: "Playbook 27 — Frontend Presentation Wiring"
+  hosts: motorcade_web
+  become: true
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    uploads_local_dir: "{{ playbook_dir }}/../files/wp/uploads/motorcade"
+    uploads_remote_dir: "{{ wp_root }}/wp-content/uploads/motorcade"
+
+    # Set to your real license number when ready (or set later in WP Admin by updating the option)
+    texas_dps_license: ""
+
+    # Patch sources (controller)
+    patch_dir: "{{ playbook_dir }}/../files/theme/patches"
+    front_page_src: "{{ patch_dir }}/front-page.php"
+    footer_dps_src: "{{ patch_dir }}/footer-dps.block.php"
+    presentation_css_src: "{{ patch_dir }}/presentation.css"
+
+  tasks:
+    - name: Assert WordPress root exists
+      ansible.builtin.stat:
+        path: "{{ wp_root }}/wp-config.php"
+      register: wp_cfg
+
+    - name: Fail if WordPress root not found
+      ansible.builtin.fail:
+        msg: "WordPress root not found at {{ wp_root }} (missing wp-config.php)"
+      when: not wp_cfg.stat.exists
+
+    - name: Ensure theme directory exists
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_stat
+
+    - name: Fail if theme directory missing
+      ansible.builtin.fail:
+        msg: "Theme directory missing: {{ theme_dir }} (is the theme deployed?)"
+      when: not theme_stat.stat.exists
+
+    - name: Ensure uploads/motorcade exists (for hero/service images + phase1 assets)
+      ansible.builtin.file:
+        path: "{{ uploads_remote_dir }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0755"
+
+    - name: Copy all Motorcade assets (including phase1 prototype kit) into uploads (idempotent)
+      ansible.builtin.copy:
+        src: "{{ uploads_local_dir }}/"
+        dest: "{{ uploads_remote_dir }}/"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+        directory_mode: "0755"
+
+    - name: Check if wp-cli exists
+      ansible.builtin.command: "command -v wp"
+      register: wpcli
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Motorcade Trust theme is active (wp-cli)
+      ansible.builtin.command: "wp --path={{ wp_root }} theme activate {{ theme_slug }} --skip-themes --skip-plugins"
+      when: wpcli.rc == 0
+      register: theme_activate
+      changed_when: "'Activated' in (theme_activate.stdout | default(''))"
+      failed_when: false
+
+    - name: Set Texas DPS license option if provided (wp-cli)
+      ansible.builtin.command: "wp --path={{ wp_root }} option update motorcade_texas_dps_license '{{ texas_dps_license }}' --skip-themes --skip-plugins"
+      when:
+        - wpcli.rc == 0
+        - texas_dps_license | length > 0
+      register: dps_opt
+      changed_when: true
+
+    - name: Deploy front-page.php (template wiring)
+      ansible.builtin.copy:
+        src: "{{ front_page_src }}"
+        dest: "{{ theme_dir }}/front-page.php"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+        backup: true
+
+    - name: Ensure style.css exists
+      ansible.builtin.file:
+        path: "{{ theme_dir }}/style.css"
+        state: touch
+        owner: nginx
+        group: nginx
+        mode: "0644"
+
+    - name: Inject presentation CSS (managed block)
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/style.css"
+        marker: "/* {mark} MOTORCADE_PRESENTATION */"
+        insertafter: EOF
+        block: "{{ lookup('file', presentation_css_src) }}"
+      notify:
+        - reload php-fpm
+
+    - name: Inject DPS license line into theme footer (managed block)
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/footer.php"
+        marker: "<!-- {mark} MOTORCADE_DPS_LICENSE -->"
+        # Use a literal match (no regex) to avoid YAML escaping issues.
+        insertbefore: 'wp_footer();'
+        block: "{{ lookup('file', footer_dps_src) }}"
+      notify:
+        - reload php-fpm
+
+    - name: Quick verify — hero image file exists on server
+      ansible.builtin.stat:
+        path: "{{ uploads_remote_dir }}/hero-executive-protection.jpg"
+      register: hero_stat
+
+    - name: Print summary / next-action hints
+      ansible.builtin.debug:
+        msg:
+          - "Front page wired via: {{ theme_dir }}/front-page.php"
+          - "Assets served from: {{ uploads_remote_dir }} (including phase1 prototype kit)"
+          - "Hero image present: {{ hero_stat.stat.exists | default(false) }}"
+          - "DPS license option: {{ 'set' if (texas_dps_license|length>0) else 'not set (update via wp option motorcade_texas_dps_license)' }}"
+          - "Verify: https://motorcade.vip (hero + services + trust + CTA should be visible)"
+          - "If DPS still missing: set option -> wp --path={{ wp_root }} option update motorcade_texas_dps_license 'YOUR_NUMBER'"
+
+  handlers:
+    - name: reload php-fpm
+      ansible.builtin.service:
+        name: php-fpm
+        state: reloaded

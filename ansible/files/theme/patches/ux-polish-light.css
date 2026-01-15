@@ -1,0 +1,302 @@
+/*
+ * MOTORCADE_UX_POLISH (Playbook 28b) — Light + Responsive
+ * Managed by Ansible. Do not edit manually.
+ */
+
+:root{
+  --mc-bg: #ffffff;
+  --mc-ink: #0b1220;
+  --mc-muted: rgba(11,18,32,.72);
+  --mc-soft: rgba(11,18,32,.08);
+  --mc-soft2: rgba(11,18,32,.14);
+  --mc-blue: #1d4ed8;
+  --mc-blue2: #0b3aa6;
+  --mc-radius: 18px;
+  --mc-shadow: 0 10px 30px rgba(0,0,0,.10);
+}
+
+body{
+  background: var(--mc-bg) !important;
+  color: var(--mc-ink) !important;
+}
+
+.mc-page{
+  width: 100%;
+  max-width: 100%;
+}
+
+.mc-container{
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.mc-section{
+  padding: 56px 0;
+  background: var(--mc-bg);
+}
+
+.mc-hero{
+  background:
+    radial-gradient(1200px 500px at 25% 20%, rgba(29,78,216,.28), rgba(11,18,32,.92) 60%),
+    linear-gradient(180deg, rgba(11,18,32,.85), rgba(11,18,32,.95)),
+    url('/wp-content/uploads/motorcade/hero-executive-protection.jpg') center/cover no-repeat;
+  border-radius: var(--mc-radius);
+  overflow: hidden;
+  margin: 28px auto 0;
+  max-width: 1180px;
+  box-shadow: var(--mc-shadow);
+}
+
+.mc-hero__inner{
+  padding: 56px 56px 34px;
+  color: #f8fafc;
+}
+
+.mc-eyebrow{
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 12px;
+  color: rgba(248,250,252,.80);
+  margin: 0 0 10px;
+}
+
+.mc-h1{
+  font-size: clamp(32px, 4.2vw, 56px);
+  line-height: 1.05;
+  margin: 0 0 12px;
+}
+
+.mc-subhead{
+  max-width: 52ch;
+  color: rgba(248,250,252,.76);
+  font-size: 16px;
+  line-height: 1.55;
+  margin: 0 0 18px;
+}
+
+.mc-ctaRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0 18px;
+}
+
+.mc-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  text-decoration: none !important;
+  border: 1px solid transparent;
+}
+
+.mc-btn--primary{
+  background: var(--mc-blue);
+  color: #fff !important;
+}
+
+.mc-btn--primary:hover{ background: var(--mc-blue2); }
+
+.mc-btn--ghost{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.20);
+  color: rgba(255,255,255,.92) !important;
+}
+
+.mc-hero__meta{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.mc-chip{
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.14);
+  color: rgba(255,255,255,.86);
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+/* Trust band */
+.mc-section--trust{
+  padding-top: 22px;
+  padding-bottom: 6px;
+}
+
+.mc-trustGrid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.mc-trustCard{
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--mc-soft);
+  border-radius: 14px;
+  padding: 14px 14px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.06);
+}
+
+.mc-trustIcon{
+  width: 44px; height: 44px;
+  display: grid;
+  place-items: center;
+  background: rgba(29,78,216,.08);
+  border: 1px solid rgba(29,78,216,.14);
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+
+.mc-trustIcon img{ width: 26px; height: 26px; }
+
+.mc-trustTitle{
+  font-weight: 800;
+  color: var(--mc-ink);
+  line-height: 1.1;
+}
+
+.mc-trustDesc{
+  color: var(--mc-muted);
+  font-size: 13px;
+}
+
+/* Two-column section */
+.mc-twoCol{
+  display: grid;
+  grid-template-columns: 1.3fr .9fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.mc-h2{
+  font-size: clamp(26px, 2.3vw, 36px);
+  margin: 0 0 10px;
+  color: var(--mc-ink);
+}
+
+.mc-h3{
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+
+.mc-lead{
+  color: var(--mc-muted);
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.mc-lead--narrow{ max-width: 62ch; }
+
+.mc-bullets{
+  margin: 12px 0 16px 18px;
+  color: var(--mc-ink);
+}
+
+.mc-sideCard{
+  border-radius: var(--mc-radius);
+  border: 1px solid var(--mc-soft);
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(0,0,0,.08);
+}
+
+.mc-sideCard__top{ padding: 18px 18px 10px; }
+
+.mc-sideBadge{
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(29,78,216,.92);
+  background: rgba(29,78,216,.10);
+  border: 1px solid rgba(29,78,216,.18);
+  padding: 6px 10px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+
+.mc-muted{ color: var(--mc-muted); }
+
+.mc-sideCard__img img{
+  display: block;
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+}
+
+/* Services */
+.mc-section--services{
+  background: #fff;
+  padding-top: 44px;
+}
+
+.mc-cardGrid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.mc-card{
+  border: 1px solid var(--mc-soft);
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px 16px 18px;
+  box-shadow: 0 10px 22px rgba(0,0,0,.06);
+}
+
+.mc-card__icon{
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: rgba(11,18,32,.04);
+  border: 1px solid var(--mc-soft);
+  display: grid;
+  place-items: center;
+  margin-bottom: 10px;
+}
+
+.mc-card__icon img{ width: 22px; height: 22px; opacity: .9; }
+
+.mc-card__title{
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: var(--mc-ink);
+}
+
+.mc-card__text{
+  margin: 0 0 10px;
+  color: var(--mc-muted);
+  line-height: 1.55;
+}
+
+.mc-link{
+  color: var(--mc-blue) !important;
+  font-weight: 800;
+  text-decoration: none !important;
+}
+
+/* Responsive */
+@media (max-width: 980px){
+  .mc-hero{ border-radius: 16px; margin: 18px auto 0; }
+  .mc-hero__inner{ padding: 40px 28px 24px; }
+  .mc-twoCol{ grid-template-columns: 1fr; }
+  .mc-cardGrid{ grid-template-columns: 1fr; }
+  .mc-trustGrid{ grid-template-columns: 1fr; }
+  .mc-sideCard__img img{ height: 200px; }
+}
+
+@media (max-width: 520px){
+  .mc-container{ padding: 0 16px; }
+  .mc-hero__inner{ padding: 32px 18px 18px; }
+}

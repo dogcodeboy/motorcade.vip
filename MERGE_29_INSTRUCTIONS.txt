@@ -1,0 +1,14 @@
+MERGE NOTES (Playbook 29)
+
+1) Copy/merge these files into your repo root:
+- ansible/playbooks/29_brand_logo.yml
+- docs/playbooks/29-BRANDING-LOGO.md
+- ansible/files/wp/assets/images/motorcade/motorcade-logo.png (already exists in most repos; included for completeness)
+
+2) Update docs/playbooks/README.md:
+Append the contents of:
+- docs/playbooks/README-APPEND-29.txt
+
+3) Run:
+cd ansible
+ansible-playbook -i inventories/prod/hosts.ini playbooks/29_brand_logo.yml
