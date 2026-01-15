@@ -1,5 +1,5 @@
 ---
-- name: "Playbook 30 - Branding: Logo assets + Customizer toggle"
+- name: "Playbook 30 - Branding: Shield-only logo assets + header enforcement"
   hosts: motorcade_web
   become: true
 
@@ -13,6 +13,32 @@
 
     # Local repo asset source directory (relative to ansible/)
     repo_brand_assets: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/branding"
+
+    # Shield-only assets we allow (everything else gets removed from uploads)
+    shield_assets:
+      - motorcade-badge-40.png
+      - motorcade-badge-48.png
+      - motorcade-badge-64.png
+      - motorcade-badge-96.png
+      - motorcade-badge-128.png
+      - motorcade-badge-256.png
+      - motorcade-badge-512.png
+      - motorcade-site-icon-512.png
+      - motorcade-header-logo.png
+      - motorcade-header-logo-light.png
+      - motorcade-header-logo-dark.png
+
+    # Any legacy / accidental assets we want removed from uploads to prevent regressions
+    legacy_brand_assets:
+      - motorcade-header-combo-dark.png
+      - motorcade-header-combo-dark-raw.png
+      - motorcade-header-combo-light.png
+      - motorcade-header-combo-light-raw.png
+      - motorcade-wordmark-dark.png
+      - motorcade-wordmark-dark-fixed.png
+      - motorcade-wordmark-light.png
+      - wordmark_dark.png
+      - wordmark_light.png
 
   tasks:
     - name: Assert theme directory exists
@@ -33,15 +59,20 @@
         group: nginx
         mode: "0755"
 
-    - name: Upload branding image assets to wp-content/uploads (idempotent)
+    - name: Remove legacy/accidental branding assets from uploads (idempotent)
+      ansible.builtin.file:
+        path: "{{ uploads_brand_dir }}/{{ item }}"
+        state: absent
+      loop: "{{ legacy_brand_assets }}"
+
+    - name: Upload shield-only branding assets to wp-content/uploads (idempotent)
       ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "{{ uploads_brand_dir }}/{{ item | basename }}"
+        src: "{{ repo_brand_assets }}/{{ item }}"
+        dest: "{{ uploads_brand_dir }}/{{ item }}"
         owner: nginx
         group: nginx
         mode: "0644"
-      with_fileglob:
-        - "{{ repo_brand_assets }}/*.png"
+      loop: "{{ shield_assets }}"
 
     - name: Verify wp-cli exists
       ansible.builtin.command: wp --info
@@ -70,11 +101,10 @@
         msg: "Missing theme style.css at {{ theme_dir }}/style.css"
       when: not style_stat.stat.exists
 
-    - name: Import header logos + badge to Media Library (idempotent-ish)
+    - name: Import shield assets to Media Library (best-effort)
       ansible.builtin.command: >
         wp --path={{ wp_path }} media import
-        {{ uploads_brand_dir }}/motorcade-header-logo-light.png
-        {{ uploads_brand_dir }}/motorcade-header-logo-dark.png
+        {{ uploads_brand_dir }}/motorcade-site-icon-512.png
         {{ uploads_brand_dir }}/motorcade-badge-256.png
         --porcelain
       become_user: nginx
@@ -82,14 +112,14 @@
       changed_when: false
       failed_when: false
 
-    - name: Add Motorcade Branding Customizer controls + render helpers + brandbar (idempotent)
+    - name: Enforce shield-only header branding (no wordmark/combo) (idempotent)
       ansible.builtin.blockinfile:
         path: "{{ theme_dir }}/functions.php"
         marker: "// MOTORCADE_BRAND_CUSTOMIZER {mark}"
         insertafter: EOF
         block: |
           /**
-           * Motorcade Branding — Logo Variant Toggle + Brand Bar
+           * Motorcade Branding — Shield-only assets
            * Managed by Ansible (Playbook 30). Do not edit inside markers.
            */
           add_action('customize_register', function($wp_customize) {
@@ -99,29 +129,11 @@
               $wp_customize->add_section($section, [
                 'title'       => 'Motorcade Branding',
                 'priority'    => 25,
-                'description' => 'Choose which logo style to display (badge vs wordmark).',
+                'description' => 'Shield-only branding (repo-managed).',
               ]);
             }
 
-            // Variant toggle
-            $wp_customize->add_setting('motorcade_logo_variant', [
-              'default'           => 'badge',
-              'sanitize_callback' => function($v){
-                return in_array($v, ['badge','wordmark'], true) ? $v : 'badge';
-              }
-            ]);
-
-            $wp_customize->add_control('motorcade_logo_variant', [
-              'type'    => 'radio',
-              'section' => $section,
-              'label'   => 'Logo style',
-              'choices' => [
-                'badge'    => 'Badge (shield)',
-                'wordmark' => 'Wordmark (text)',
-              ]
-            ]);
-
-            // Optional: show always-on brand bar (recommended for trust/recognition)
+            // Show always-on brand bar (recommended for recognition / trust)
             $wp_customize->add_setting('motorcade_brandbar_enabled', [
               'default'           => true,
               'sanitize_callback' => function($v){ return (bool)$v; }
@@ -129,96 +141,72 @@
             $wp_customize->add_control('motorcade_brandbar_enabled', [
               'type'    => 'checkbox',
               'section' => $section,
-              'label'   => 'Show Brand Bar (logo + name in header)',
+              'label'   => 'Show Brand Bar (shield icon in header)',
             ]);
 
-            // Badge URL (image control)
+            // Shield badge URL (image control)
             $wp_customize->add_setting('motorcade_logo_badge_url', [
               'default'           => '{{ brand_url_base }}/motorcade-badge-64.png',
               'sanitize_callback' => 'esc_url_raw',
             ]);
             $wp_customize->add_control(new WP_Customize_Image_Control($wp_customize, 'motorcade_logo_badge_url', [
-              'label'   => 'Badge image (default: 64px)',
+              'label'   => 'Shield badge image',
               'section' => $section,
               'settings'=> 'motorcade_logo_badge_url',
             ]));
 
-            // Wordmark URL (image control)
-            $wp_customize->add_setting('motorcade_logo_wordmark_url', [
-              'default'           => '{{ brand_url_base }}/motorcade-wordmark-dark.png',
-              'sanitize_callback' => 'esc_url_raw',
-            ]);
-            $wp_customize->add_control(new WP_Customize_Image_Control($wp_customize, 'motorcade_logo_wordmark_url', [
-              'label'   => 'Wordmark image',
-              'section' => $section,
-              'settings'=> 'motorcade_logo_wordmark_url',
-            ]));
-
-            // Combo header logo (badge + wordmark)
-            $wp_customize->add_setting('motorcade_logo_header_combo_url', [
+            // Header logo (shield only)
+            $wp_customize->add_setting('motorcade_logo_header_url', [
               'default'           => '{{ brand_url_base }}/motorcade-header-logo-light.png',
               'sanitize_callback' => 'esc_url_raw',
             ]);
-            $wp_customize->add_control(new WP_Customize_Image_Control($wp_customize, 'motorcade_logo_header_combo_url', [
-              'label'   => 'Header combo (badge + wordmark)',
+            $wp_customize->add_control(new WP_Customize_Image_Control($wp_customize, 'motorcade_logo_header_url', [
+              'label'   => 'Header logo (shield)',
               'section' => $section,
-              'settings'=> 'motorcade_logo_header_combo_url',
+              'settings'=> 'motorcade_logo_header_url',
             ]));
           });
 
           /**
-           * Render selected Motorcade logo variant.
+           * Render Motorcade shield logo.
            */
           function motorcade_brand_logo_html($args = []) {
             $defaults = [
-              'class'        => 'mc-brand-logo',
-              'alt'          => 'Motorcade Security Solutions',
-              'prefer_combo' => true,
+              'class' => 'mc-brand-logo',
+              'alt'   => 'Motorcade Security Solutions',
             ];
             $args = array_merge($defaults, is_array($args) ? $args : []);
 
-            $variant = get_theme_mod('motorcade_logo_variant', 'badge');
-            $badge   = get_theme_mod('motorcade_logo_badge_url', '{{ brand_url_base }}/motorcade-badge-64.png');
-            $word    = get_theme_mod('motorcade_logo_wordmark_url', '{{ brand_url_base }}/motorcade-wordmark-dark.png');
-            $combo   = get_theme_mod('motorcade_logo_header_combo_url', '{{ brand_url_base }}/motorcade-header-logo-light.png');
-
-            if (!empty($args['prefer_combo']) && !empty($combo)) {
-              $src = esc_url($combo);
-              return '<img class="'.esc_attr($args['class']).'" src="'.$src.'" alt="'.esc_attr($args['alt']).'" loading="eager" decoding="async" />';
-            }
-
-            $src = ($variant === 'wordmark') ? $word : $badge;
+            $src = get_theme_mod('motorcade_logo_header_url', '{{ brand_url_base }}/motorcade-header-logo-light.png');
             $src = esc_url($src);
             return '<img class="'.esc_attr($args['class']).'" src="'.$src.'" alt="'.esc_attr($args['alt']).'" loading="eager" decoding="async" />';
           }
 
           /**
-           * Brand Bar: guarantees visible branding even if theme header doesn't output the Custom Logo.
+           * Brand Bar: guarantees visible branding even if header template doesn't output the Custom Logo.
+           * Shield-only; no wordmark text.
            */
           add_action('wp_body_open', function(){
             if (!get_theme_mod('motorcade_brandbar_enabled', true)) return;
 
-            $logo = motorcade_brand_logo_html(['class' => 'mc-brand-logo mc-brand-logo--bar', 'prefer_combo' => true]);
+            $logo = motorcade_brand_logo_html(['class' => 'mc-brand-logo mc-brand-logo--bar']);
             $home = esc_url(home_url('/'));
             echo '<div class="mc-brandbar" role="banner">'
                . '<a class="mc-brandbar__link" href="'.$home.'" rel="home" aria-label="Motorcade">'
                . $logo
-               . '<span class="mc-brandbar__name">Motorcade Security Solutions</span>'
                . '</a>'
                . '</div>';
           }, 5);
 
-          // If the theme uses the WordPress Custom Logo, replace it with our selected asset.
+          // If the theme uses the WordPress Custom Logo, replace it with our shield asset.
           add_filter('get_custom_logo', function($html){
-            $variant = get_theme_mod('motorcade_logo_variant', '');
-            if (!$variant) return $html;
-
-            $logo = motorcade_brand_logo_html(['class' => 'custom-logo', 'prefer_combo' => true]);
+            if (!$html) return $html;
+            $logo = motorcade_brand_logo_html(['class' => 'custom-logo']);
             $home = esc_url(home_url('/'));
-            return '<a href="'.$home.'" class="custom-logo-link" rel="home" aria-label="Motorcade">'.$logo.'</a>';
+            return '<a href="'.$home.'" class="custom-logo-link mc-brand-link" rel="home" aria-label="Motorcade">'.$logo.'</a>';
           }, 20);
 
-    - name: Append Motorcade brand logo CSS (idempotent)
+    - name: Append Motorcade shield-only logo CSS (idempotent)
       ansible.builtin.blockinfile:
         path: "{{ theme_dir }}/style.css"
         marker: "/* MOTORCADE_BRAND_LOGO_CSS {mark} */"
@@ -239,35 +227,24 @@
             padding: 10px 16px;
             text-decoration: none;
           }
-          .mc-brandbar__name {
-            font-weight: 700;
-            letter-spacing: 0.2px;
-            color: #0f172a;
-            font-size: 14px;
-            line-height: 1;
-            white-space: nowrap;
-          }
           .mc-brand-logo, .custom-logo {
             height: 40px;
             width: auto;
-            max-width: 260px;
+            max-width: 64px; /* shield only */
           }
           .mc-brand-logo--bar { height: 34px; }
           @media (min-width: 768px) {
-            .mc-brand-logo, .custom-logo { height: 44px; }
+            .mc-brand-logo, .custom-logo { height: 44px; max-width: 72px; }
             .mc-brand-logo--bar { height: 36px; }
-            .mc-brandbar__name { font-size: 15px; }
           }
 
-    - name: Set default theme mods (variant + URLs) (idempotent)
+    - name: Set default theme mods (shield-only) (best-effort)
       ansible.builtin.command: >
         wp --path={{ wp_path }} theme mod set {{ item.key }} {{ item.value }}
       become_user: nginx
       loop:
-        - { key: motorcade_logo_variant, value: badge }
         - { key: motorcade_logo_badge_url, value: "{{ brand_url_base }}/motorcade-badge-64.png" }
-        - { key: motorcade_logo_wordmark_url, value: "{{ brand_url_base }}/motorcade-wordmark-dark.png" }
-        - { key: motorcade_logo_header_combo_url, value: "{{ brand_url_base }}/motorcade-header-logo-light.png" }
+        - { key: motorcade_logo_header_url, value: "{{ brand_url_base }}/motorcade-header-logo-light.png" }
         - { key: motorcade_brandbar_enabled, value: 1 }
       changed_when: false
       failed_when: false
@@ -287,7 +264,7 @@
     - name: Print summary
       ansible.builtin.debug:
         msg:
-          - "Uploaded logo assets to: {{ uploads_brand_dir }}"
-          - "Customizer: Appearance → Customize → Motorcade Branding → Logo style"
-          - "Brand Bar enabled by default to ensure visible branding even if header template doesn't render custom logo."
+          - "Uploaded shield-only branding assets to: {{ uploads_brand_dir }}"
+          - "Removed legacy combo/wordmark assets from uploads to prevent regressions."
+          - "Brand Bar outputs shield-only (no wordmark text)."
           - "Homepage: https://motorcade.vip"

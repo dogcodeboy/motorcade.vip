@@ -7,7 +7,8 @@
     theme_dir: '{{ wp_path }}/wp-content/themes/{{ theme_slug }}'
     uploads_brand_dir: '{{ wp_path }}/wp-content/uploads/motorcade/branding'
     repo_brand_assets: '{{ playbook_dir }}/../files/wp/assets/images/motorcade/branding'
-    header_logo_file: motorcade-header-logo-light.png
+    # Shield-only branding (no wordmark) — use the badge as the WP custom logo.
+    header_logo_file: motorcade-badge-256.png
     site_icon_file: motorcade-site-icon-512.png
   tasks:
   - name: Ensure branding uploads directory exists

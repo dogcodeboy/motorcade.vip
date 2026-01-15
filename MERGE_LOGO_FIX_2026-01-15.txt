@@ -1,0 +1,17 @@
+Motorcade Logo Fix Patch (2026-01-15)
+
+What this patch does:
+- Replaces the incorrect 'motorcade-logo.png' (which was a UI mockup screenshot) with a clean transparent header lockup.
+- Adds a separate square icon asset: ansible/files/wp/assets/images/motorcade/branding/motorcade-icon.png
+- Updates Playbook 29 CSS so the header uses ONLY the lockup (hides the redundant site-name text) and increases logo height.
+
+How to apply:
+1) Unzip into repo root (motorcade.vip/) and overwrite when prompted.
+2) Commit with message: "Fix header logo asset + Playbook 29 CSS"
+3) Re-run Playbook 29 on prod (no wildcards):
+   cd ansible
+   ansible-playbook -i inventories/prod/hosts.ini playbooks/29_brand_logo.yml
+
+Notes:
+- No wp-admin uploads, no manual edits required.
+- If WP custom logo cache persists, hard refresh browser or purge any caching plugin/CDN.

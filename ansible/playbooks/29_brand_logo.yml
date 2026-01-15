@@ -6,9 +6,11 @@
     wp_path: /var/www/motorcade
     theme_slug: motorcade-trust
     theme_dir: "{{ wp_path }}/wp-content/themes/{{ theme_slug }}"
-    logo_src: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/motorcade-logo.png"
+    logo_src: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/motorcade-shield-512.png"
+    favicon_src: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/motorcade-favicon-512.png"
     logo_dst_dir: "{{ theme_dir }}/assets/img"
-    logo_dst: "{{ logo_dst_dir }}/motorcade-logo.png"
+    logo_dst: "{{ logo_dst_dir }}/motorcade-shield.png"
+    favicon_dst: "{{ logo_dst_dir }}/motorcade-favicon.png"
 
   handlers:
     - name: reload nginx
@@ -56,6 +58,14 @@
         group: nginx
         mode: "0644"
 
+    - name: Copy Motorcade favicon into theme assets (idempotent)
+      ansible.builtin.copy:
+        src: "{{ favicon_src }}"
+        dest: "{{ favicon_dst }}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+
     # ---- Header injection: add a branded mark that is resilient even if WP custom logo isn't set.
     - name: Inject Motorcade brand/logo block into header.php (managed block)
       ansible.builtin.blockinfile:
@@ -74,10 +84,8 @@
               <?php if (function_exists('has_custom_logo') && has_custom_logo()): ?>
                 <?php the_custom_logo(); ?>
               <?php else: ?>
-                <img class="mc-brand__logo" src="<?php echo esc_url(get_stylesheet_directory_uri() . '/assets/img/motorcade-logo.png'); ?>" alt="Motorcade Security Solutions">
-              <?php endif; ?>
-              <span class="mc-brand__name"><?php echo esc_html(get_bloginfo('name')); ?></span>
-            </a>
+                <img class="mc-brand__logo" src="<?php echo esc_url(get_stylesheet_directory_uri() . '/assets/img/motorcade-shield.png'); ?>" alt="Motorcade Security Solutions">
+              <?php endif; ?>            </a>
           </div>
       notify:
         - reload php-fpm
@@ -92,25 +100,19 @@
           .site-header .site-branding { display: flex; align-items: center; gap: 14px; }
           .mc-brand { display: flex; align-items: center; }
           .mc-brand__link { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
-          .mc-brand__logo { height: 34px; width: auto; display: block; }
-          .custom-logo { height: 34px; width: auto; display: block; }
-          .mc-brand__name {
-            font-weight: 700;
-            letter-spacing: 0.2px;
-            color: #0b1b2b;
-            font-size: 18px;
-            line-height: 1;
-            white-space: nowrap;
-          }
-          /* On smaller screens, keep it clean and avoid crowding nav */
+          .mc-brand__logo { height: 44px; width: auto; display: block; }
+          .custom-logo { height: 44px; width: auto; display: block; }
+
+          /* Hide duplicate text label; use shield-only per brand */
+          .mc-brand__name { display: none; }
+
+          /* On smaller screens, reduce height to avoid crowding */
           @media (max-width: 900px) {
-            .mc-brand__name { font-size: 16px; }
-            .mc-brand__logo, .custom-logo { height: 30px; }
+            .mc-brand__logo, .custom-logo { height: 40px; }
           }
           @media (max-width: 600px) {
-            .mc-brand__name { display: none; } /* logo-only for tight mobile headers */
+            .mc-brand__logo, .custom-logo { height: 36px; }
           }
-
     # ---- WP custom logo setup: import logo and set theme mod so WP functions render it too.
     - name: Check wp-cli exists
       ansible.builtin.command: wp --info
@@ -124,12 +126,18 @@
       ansible.builtin.shell: |
         set -euo pipefail
         # Import logo if not already imported; reuse existing attachment if present.
-        ATTACH_ID="$(sudo -u nginx wp --path={{ wp_path }} post list --post_type=attachment --posts_per_page=200 --format=csv --fields=ID,post_title,guid           | awk -F',' 'tolower($2) ~ /motorcade/ && tolower($3) ~ /motorcade-logo\.png/ {print $1; exit}')"
+        ATTACH_ID="$(sudo -u nginx wp --path={{ wp_path }} post list --post_type=attachment --posts_per_page=200 --format=csv --fields=ID,post_title,guid           | awk -F',' 'tolower($2) ~ /motorcade/ && tolower($3) ~ /motorcade-shield\.png/ {print $1; exit}')"
         if [ -z "${ATTACH_ID}" ]; then
           ATTACH_ID="$(sudo -u nginx wp --path={{ wp_path }} media import "{{ logo_dst }}" --porcelain)"
         fi
         # Set Custom Logo theme mod
         sudo -u nginx wp --path={{ wp_path }} theme mod set custom_logo "${ATTACH_ID}"
+        # Also set Site Icon (favicon) to shield-only 512px
+        ICON_ID="$(sudo -u nginx wp --path={{ wp_path }} post list --post_type=attachment --posts_per_page=200 --format=csv --fields=ID,guid | awk -F',' 'tolower($2) ~ /motorcade-favicon\.png/ {print $1; exit}')"
+        if [ -z "${ICON_ID}" ]; then
+          ICON_ID="$(sudo -u nginx wp --path={{ wp_path }} media import "{{ favicon_dst }}" --porcelain)"
+        fi
+        sudo -u nginx wp --path={{ wp_path }} option update site_icon "${ICON_ID}"
         echo "${ATTACH_ID}"
       args:
         chdir: "{{ wp_path }}"

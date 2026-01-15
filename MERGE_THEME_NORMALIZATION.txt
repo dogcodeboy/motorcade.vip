@@ -1,0 +1,17 @@
+Motorcade Theme Vendoring Normalization Patch (2026-01-15)
+
+Goal
+- Normalize the vendored extracted theme directory path.
+- Remove the accidental nested theme folder introduced during recovery.
+
+This patch adds a canonical extracted theme directory at:
+  ansible/files/themes/motorcade-trust/
+
+After merging this patch into your repo, delete the accidental nested copy at:
+  ansible/ansible/ansible/files/themes/motorcade-trust/
+
+Then verify there is NO remaining ansible/ansible/ansible/ tree in the repo.
+
+Notes
+- This patch does not change any server state.
+- Next session: add/revise a theme deploy playbook to install the theme from a single repo-managed source.
