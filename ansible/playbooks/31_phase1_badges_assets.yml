@@ -1,0 +1,75 @@
+---
+- name: "Playbook 31 - Restore Phase 1 badge SVG assets (repo-managed uploads)"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    uploads_root: "{{ wp_root }}/wp-content/uploads"
+
+    # Source assets live in the repo under ansible/files/... (copied by Ansible)
+    local_badges_dir: "{{ playbook_dir }}/../files/wp/uploads/motorcade/phase1/badges/svg"
+    remote_badges_dir: "{{ uploads_root }}/motorcade/phase1/badges/svg"
+
+    # These filenames must match what the theme references in HTML/PHP.
+    badge_svgs:
+      - "licensed-insured.svg"
+      - "background-checked.svg"
+      - "rapid-response.svg"
+      - "24-7-dispatch.svg"
+      - "texas-compliant.svg"
+
+  tasks:
+    - name: "Assert WP root exists"
+      stat:
+        path: "{{ wp_root }}"
+      register: wp_root_stat
+
+    - name: "Fail if WP root missing"
+      fail:
+        msg: "Expected WordPress root at {{ wp_root }} but it was not found."
+      when: not wp_root_stat.stat.exists
+
+    - name: "Ensure badge destination directory exists"
+      file:
+        path: "{{ remote_badges_dir }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0755"
+        recurse: true
+
+    - name: "Copy Phase 1 badge SVGs to uploads (so theme URLs resolve)"
+      copy:
+        src: "{{ local_badges_dir }}/{{ item }}"
+        dest: "{{ remote_badges_dir }}/{{ item }}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+      loop: "{{ badge_svgs }}"
+
+    - name: "Verify badge SVGs are present on server"
+      stat:
+        path: "{{ remote_badges_dir }}/{{ item }}"
+      loop: "{{ badge_svgs }}"
+      register: badge_stats
+
+    - name: "Fail if any badge SVG is missing after copy"
+      fail:
+        msg: "Badge SVG missing after copy: {{ item.stat.path }}"
+      loop: "{{ badge_stats.results }}"
+      when: not item.stat.exists
+
+    - name: "Reload nginx (safe)"
+      service:
+        name: nginx
+        state: reloaded
+      ignore_errors: true
+
+    - name: "Print summary"
+      debug:
+        msg:
+          - "Restored Phase 1 badge assets: {{ badge_svgs | join(', ') }}"
+          - "Remote path: {{ remote_badges_dir }}"
+          - "Homepage: https://motorcade.vip"
+          - "If the icons still look broken, hard refresh (Ctrl+F5) or test in a private window."
