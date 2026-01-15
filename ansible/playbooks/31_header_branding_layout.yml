@@ -1,0 +1,121 @@
+---
+- name: "31 - Header and Branding Layout Consolidation (motorcade-trust theme)"
+  hosts: motorcade
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_path: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    style_css: "{{ theme_path }}/style.css"
+
+  tasks:
+    - name: Stat theme style.css
+      ansible.builtin.stat:
+        path: "{{ style_css }}"
+      register: mc_style
+
+    - name: Fail if theme style.css not found
+      ansible.builtin.fail:
+        msg: "Expected theme file missing: {{ style_css }}"
+      when: not mc_style.stat.exists
+
+    - name: Backup style.css (timestamped)
+      ansible.builtin.copy:
+        src: "{{ style_css }}"
+        dest: "{{ style_css }}.bak.{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+        mode: preserve
+      changed_when: false
+
+    - name: Inject Playbook 31 header layout overrides into theme style.css
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MOTORCADE PLAYBOOK 31 HEADER LAYOUT */"
+        insertafter: EOF
+        block: |
+          
+          /*
+           * Playbook 31: Header + Branding Layout Consolidation
+           * Scope: layout, spacing, hierarchy, responsiveness
+           * Rules: NO asset changes, NO wp-admin, theme-only CSS override
+           */
+
+          /* 1) Remove excess whitespace above header */
+          body { margin-top: 0 !important; }
+
+          /* 2) Suppress duplicate branding layers (keep ONLY the canonical header row) */
+          .motorcade-brandbar { display: none !important; }
+
+          /* 3) If a legacy duplicate brand element exists outside the header, hide it */
+          body > .mc-brand,
+          body > .mc-brandbar,
+          .mc-brandbar + .mc-brand { display: none !important; }
+
+          /* 4) Suppress WP "Site Identity" area if it is still rendering */
+          .site-branding,
+          .custom-logo,
+          .custom-logo-link {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          /* Hide default site title/tagline if present */
+          .site-title,
+          .site-description { display: none !important; }
+
+          /* 5) Canonical header row alignment */
+          header,
+          .site-header,
+          .mc-brandbar {
+            margin: 0 !important;
+            padding-top: 0 !important;
+          }
+
+          .mc-brandbar {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 16px !important;
+            padding: 10px 18px !important;
+          }
+
+          /* 6) Ensure logo and nav are vertically aligned inline */
+          .mc-brandbar .mc-brand,
+          .mc-brandbar .brand,
+          .mc-brandbar .logo,
+          .mc-brandbar .site-logo {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+          }
+
+          .mc-brandbar img,
+          .mc-brandbar .custom-logo {
+            height: 42px !important;
+            width: auto !important;
+            display: block !important;
+          }
+
+          .mc-brandbar nav {
+            display: flex !important;
+            align-items: center !important;
+          }
+
+          /* 7) Responsive behavior */
+          @media (max-width: 900px) {
+            .mc-brandbar {
+              flex-wrap: wrap !important;
+              justify-content: flex-start !important;
+              row-gap: 10px !important;
+            }
+
+            .mc-brandbar nav {
+              width: 100% !important;
+            }
+          }
+
+    - name: Reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
