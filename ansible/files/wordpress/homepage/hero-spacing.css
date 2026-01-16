@@ -1,0 +1,19 @@
+
+.hero {
+  padding-top: 4.5rem;
+  padding-bottom: 4rem;
+}
+.hero h1 {
+  line-height: 1.15;
+  margin-bottom: 1.25rem;
+}
+.hero p {
+  max-width: 48rem;
+  margin-bottom: 2rem;
+}
+.trust-indicators {
+  margin-top: 2.5rem;
+  gap: 1.25rem;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}

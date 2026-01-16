@@ -1,0 +1,91 @@
+---
+# Playbook 36 (v3) — Homepage Finalization (render-matched)
+#
+# Locked decisions:
+# - Imagery is FINAL. Do not crop/replace/blur.
+# - Use literal filenames from Playbook 36 final assets.
+#
+# Scope:
+# - Homepage only (front-page template + render CSS + final images)
+# - Header: single CTA (Talk to Security)
+# - Footer: minimal (no placeholder license text)
+# - No CMS restructuring or new features
+
+- name: "Playbook 36 — Homepage Finalization (v3)"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_root: "/var/www/motorcade"
+    theme_name: "motorcade-trust"
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_name }}"
+    assets_dir: "{{ theme_dir }}/assets/images"
+    local_root: "{{ playbook_dir }}/files/wordpress/homepage_render_v3_literal"
+    local_assets_dir: "{{ local_root }}/assets"
+    local_overrides_dir: "{{ local_root }}/theme_overrides"
+    ts: "{{ lookup('pipe','date +%Y%m%d-%H%M%S') }}"
+
+  tasks:
+    - name: "Assert theme directory exists"
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_stat
+
+    - name: "Fail if theme directory missing"
+      ansible.builtin.fail:
+        msg: "Theme directory not found: {{ theme_dir }}"
+      when: not theme_stat.stat.exists
+
+    - name: "Ensure assets/images directory exists"
+      ansible.builtin.file:
+        path: "{{ assets_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: "Backup key theme files (best-effort)"
+      ansible.builtin.copy:
+        src: "{{ theme_dir }}/{{ item }}"
+        dest: "{{ theme_dir }}/{{ item }}.bak.{{ ts }}"
+        remote_src: true
+      loop:
+        - front-page.php
+        - header.php
+        - footer.php
+        - style.css
+      ignore_errors: true
+
+    - name: "Upload FINAL homepage images (literal filenames)"
+      ansible.builtin.copy:
+        src: "{{ local_assets_dir }}/"
+        dest: "{{ assets_dir }}/"
+        mode: "0644"
+
+    - name: "Overwrite theme templates for render-matched homepage"
+      ansible.builtin.copy:
+        src: "{{ local_overrides_dir }}/{{ item }}"
+        dest: "{{ theme_dir }}/{{ item }}"
+        mode: "0644"
+      loop:
+        - front-page.php
+        - header.php
+        - footer.php
+
+    - name: "Inject/replace Playbook 36 render CSS block in style.css"
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/style.css"
+        marker: "/* {mark} MC HOMEPAGE RENDER PLAYBOOK 36 */"
+        block: "{{ lookup('file', local_overrides_dir + '/homepage_render_v3.css') }}"
+        create: true
+
+    - name: "Reload php-fpm if present"
+      ansible.builtin.service:
+        name: php-fpm
+        state: reloaded
+      ignore_errors: true
+
+    - name: "Summary"
+      ansible.builtin.debug:
+        msg:
+          - "Playbook 36 applied: final images + render-matched homepage template + CSS."
+          - "Images installed to: {{ assets_dir }}"
+          - "Verify: https://motorcade.vip"

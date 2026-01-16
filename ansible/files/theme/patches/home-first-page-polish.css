@@ -1,0 +1,20 @@
+/* Playbook 33 — Homepage First-Page Psychological Polish
+   Keep changes calm and minimal; no layout experiments.
+*/
+
+/* Slightly more breathing room and calmer hierarchy */
+.mc-hero { padding: 104px 0 64px; }
+.mc-hero__title { letter-spacing: -0.01em; }
+.mc-hero__cta { margin-top: 22px; gap: 12px; flex-wrap: wrap; }
+
+/* Trust indicators: feel like credentials, not marketing */
+.mc-badges { margin-top: 18px; gap: 10px; }
+.mc-badge figcaption { font-size: 13px; opacity: .92; }
+
+/* Panel: make it feel optional (lower visual dominance) */
+.mc-panel--soft { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
+.mc-panel--soft .mc-btn--ghost { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16); }
+
+@media (max-width: 920px) {
+  .mc-hero { padding: 84px 0 52px; }
+}

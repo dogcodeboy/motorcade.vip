@@ -1,0 +1,69 @@
+---
+- name: "Playbook 34 — Rollback Homepage First-Page Polish (PB33)"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    front_page: "{{ theme_dir }}/front-page.php"
+    style_css: "{{ theme_dir }}/style.css"
+    marker_begin: "/* BEGIN MOTORCADE_HOME_FIRST_PAGE_POLISH_PB33 */"
+    marker_end: "/* END MOTORCADE_HOME_FIRST_PAGE_POLISH_PB33 */"
+
+  tasks:
+    - name: Assert theme front-page exists
+      ansible.builtin.stat:
+        path: "{{ front_page }}"
+      register: fp_stat
+
+    - name: Fail if front-page.php missing
+      ansible.builtin.fail:
+        msg: "front-page.php not found at {{ front_page }}"
+      when: not fp_stat.stat.exists
+
+    - name: Find Ansible backup for front-page.php (newest)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        ls -1t {{ front_page }}.* 2>/dev/null | head -n 1 || true
+      args:
+        executable: /bin/bash
+      register: fp_backup
+      changed_when: false
+
+    - name: Fail if no backup found (cannot rollback safely)
+      ansible.builtin.fail:
+        msg: "No backup found for {{ front_page }} (expected {{ front_page }}.<timestamp>). Aborting rollback."
+      when: fp_backup.stdout | trim == ""
+
+    - name: Restore front-page.php from backup
+      ansible.builtin.copy:
+        src: "{{ fp_backup.stdout | trim }}"
+        dest: "{{ front_page }}"
+        remote_src: true
+        owner: nginx
+        group: nginx
+        mode: "0644"
+        backup: true
+
+    - name: Remove PB33 managed CSS block from style.css (if present)
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MOTORCADE_HOME_FIRST_PAGE_POLISH_PB33 */"
+        state: absent
+      notify:
+        - reload php-fpm
+
+    - name: Print rollback summary
+      ansible.builtin.debug:
+        msg:
+          - "Rolled back front-page.php from: {{ fp_backup.stdout | trim }}"
+          - "Removed PB33 CSS block marker from: {{ style_css }}"
+          - "Verify homepage: https://motorcade.vip"
+
+  handlers:
+    - name: reload php-fpm
+      ansible.builtin.service:
+        name: php-fpm
+        state: reloaded

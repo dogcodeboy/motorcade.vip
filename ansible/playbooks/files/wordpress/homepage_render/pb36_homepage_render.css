@@ -1,0 +1,184 @@
+/* === BEGIN MOTORCADE PB36 HOMEPAGE RENDER (managed) === */
+
+/* Scope all rules to the homepage to avoid affecting other pages. */
+body.home .mc-home{padding:0;margin:0;}
+
+body.home .mc-hero{
+  position:relative;
+  border-radius:22px;
+  overflow:hidden;
+  margin:28px auto 0;
+  max-width:1180px;
+  min-height:520px;
+  background-size:cover;
+  background-position:left center;
+}
+
+body.home .mc-hero::before{
+  content:"";
+  position:absolute;inset:0;
+  background:
+    radial-gradient(1200px 520px at 25% 40%, rgba(0,0,0,0.05), rgba(0,0,0,0.72)),
+    linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.70) 55%, rgba(0,0,0,0.82) 100%);
+}
+
+body.home .mc-hero__inner{
+  position:relative;
+  padding:64px 64px 56px;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:18px;
+  color:#fff;
+}
+
+body.home .mc-hero__kicker{
+  letter-spacing:0.18em;
+  text-transform:uppercase;
+  font-size:12px;
+  opacity:0.85;
+}
+
+body.home .mc-hero h1{
+  margin:0;
+  font-size:48px;
+  line-height:1.05;
+  max-width:640px;
+}
+
+body.home .mc-hero p{
+  margin:0;
+  max-width:640px;
+  font-size:16px;
+  line-height:1.6;
+  opacity:0.9;
+}
+
+body.home .mc-hero__buttons{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;}
+body.home .mc-hero__buttons a{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:12px 18px;
+  border-radius:12px;
+  text-decoration:none;
+  font-weight:600;
+}
+body.home .mc-btn-primary{
+  background:#1d4ed8;
+  color:#fff;
+  box-shadow:0 10px 24px rgba(29,78,216,.28);
+}
+body.home .mc-btn-secondary{
+  background:rgba(255,255,255,0.08);
+  color:#fff;
+  border:1px solid rgba(255,255,255,0.22);
+  backdrop-filter: blur(6px);
+}
+
+body.home .mc-pills{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;}
+body.home .mc-pill{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:8px 12px;
+  border-radius:999px;
+  background:rgba(0,0,0,0.28);
+  border:1px solid rgba(255,255,255,0.14);
+  font-size:13px;
+  opacity:0.95;
+}
+body.home .mc-pill svg{width:16px;height:16px;}
+
+body.home .mc-section{
+  max-width:1180px;
+  margin:0 auto;
+  padding:40px 0;
+}
+body.home .mc-section.mc-assess{padding-top:28px;}
+
+body.home .mc-assess__grid{
+  display:grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap:22px;
+  align-items:start;
+}
+
+body.home .mc-assess h2{font-size:34px;margin:0 0 10px;}
+body.home .mc-assess p{margin:0 0 14px;color:#334155;}
+
+body.home .mc-checklist{list-style:none;padding:0;margin:0 0 18px;}
+body.home .mc-checklist li{display:flex;gap:10px;align-items:flex-start;margin:8px 0;color:#0f172a;}
+body.home .mc-checklist li::before{content:"✓";font-weight:800;color:#16a34a;margin-top:1px;}
+
+body.home .mc-assess__cta a{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:12px 18px;
+  border-radius:12px;
+  text-decoration:none;
+  font-weight:700;
+  background:#1d4ed8;
+  color:#fff;
+  box-shadow:0 10px 24px rgba(29,78,216,.18);
+}
+
+body.home .mc-mini-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+body.home .mc-mini{
+  border-radius:18px;
+  overflow:hidden;
+  background:#fff;
+  border:1px solid rgba(15,23,42,.08);
+  box-shadow:0 12px 24px rgba(15,23,42,.08);
+}
+body.home .mc-mini__img{height:120px;background-size:cover;background-position:center;}
+body.home .mc-mini__body{padding:14px 14px 16px;}
+body.home .mc-mini__body h3{margin:0;font-size:16px;}
+body.home .mc-mini__body p{margin:6px 0 0;color:#475569;font-size:13px;line-height:1.45;}
+
+body.home .mc-risk{
+  background:#0b1220;
+  border-radius:22px;
+  overflow:hidden;
+  margin:18px auto 0;
+  max-width:1180px;
+}
+body.home .mc-risk__inner{padding:34px 32px 36px;color:#e2e8f0;}
+body.home .mc-risk__head{max-width:700px;margin-bottom:18px;}
+body.home .mc-risk__head .mc-badge{
+  display:inline-flex;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:11px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  background:rgba(59,130,246,.14);
+  color:#93c5fd;
+  border:1px solid rgba(147,197,253,.22);
+}
+body.home .mc-risk__head h2{margin:10px 0 8px;font-size:30px;color:#fff;}
+body.home .mc-risk__head p{margin:0;color:rgba(226,232,240,.82);}
+
+body.home .mc-services{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:18px;}
+body.home .mc-service{border-radius:18px;overflow:hidden;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.10);}
+body.home .mc-service__img{height:180px;background-size:cover;background-position:center;}
+body.home .mc-service__body{padding:14px 14px 16px;background:rgba(15,23,42,.55);}
+body.home .mc-service__body h3{margin:0 0 6px;color:#fff;font-size:16px;}
+body.home .mc-service__body p{margin:0 0 10px;color:rgba(226,232,240,.85);font-size:13px;line-height:1.45;}
+body.home .mc-service__body a{color:#93c5fd;text-decoration:none;font-weight:700;}
+
+/* Footer license styling (works with PB36 block). */
+.mc-footer-license{margin-top:10px;font-size:12px;opacity:.85;}
+
+/* Responsive */
+@media (max-width: 1024px){
+  body.home .mc-hero__inner{padding:54px 44px 46px;}
+  body.home .mc-hero{min-height:460px;}
+  body.home .mc-assess__grid{grid-template-columns:1fr;}
+  body.home .mc-mini-cards{grid-template-columns:1fr 1fr;}
+  body.home .mc-services{grid-template-columns:1fr;}
+  body.home .mc-service__img{height:220px;}
+}
+@media (max-width: 640px){
+  body.home .mc-hero__inner{padding:44px 18px 34px;}
+  body.home .mc-hero{min-height:380px;margin-top:18px;border-radius:18px;}
+  body.home .mc-hero h1{font-size:34px;}
+  body.home .mc-mini-cards{grid-template-columns:1fr;}
+  body.home .mc-risk__inner{padding:26px 18px 28px;}
+}
+
+/* === END MOTORCADE PB36 HOMEPAGE RENDER (managed) === */

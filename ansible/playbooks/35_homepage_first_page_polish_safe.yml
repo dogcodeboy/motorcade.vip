@@ -1,0 +1,54 @@
+---
+- name: Playbook 35 — Homepage First Page Psychological Polish (SAFE)
+  hosts: web
+  become: yes
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_dir: "{{ wp_root }}/wp-content/themes/motorcade-trust"
+    front_page: "{{ theme_dir }}/front-page.php"
+    style_css: "{{ theme_dir }}/style.css"
+
+  tasks:
+    - name: Assert WordPress front-page exists
+      stat:
+        path: "{{ front_page }}"
+      register: fp
+
+    - name: Fail if front-page missing
+      fail:
+        msg: "front-page.php not found — aborting safe polish"
+      when: not fp.stat.exists
+
+    - name: Replace CTA text — Request Coverage → Talk to Security
+      replace:
+        path: "{{ front_page }}"
+        regexp: '>\s*Request\s+Coverage\s*<'
+        replace: '>Talk to Security<'
+
+    - name: Replace CTA text — Explore Services → What We Handle
+      replace:
+        path: "{{ front_page }}"
+        regexp: '>\s*Explore\s+Services\s*<'
+        replace: '>What We Handle<'
+
+    - name: Replace CTA text — Start Request → Start a conversation
+      replace:
+        path: "{{ front_page }}"
+        regexp: '>\s*Start\s+Request\s*<'
+        replace: '>Start a conversation<'
+
+    - name: Inject calm homepage CSS polish (managed block)
+      blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} PB35 SAFE HOMEPAGE POLISH */"
+        block: |
+          .hero-cta-group { gap: 14px; }
+          .hero-cta-primary { box-shadow: none; }
+          .trust-badges { margin-top: 18px; }
+
+  handlers:
+    - name: reload php-fpm
+      service:
+        name: php-fpm
+        state: reloaded

@@ -1,0 +1,39 @@
+
+---
+- name: Playbook 32 — Homepage First Page Psychological Polish
+  hosts: web
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade.vip
+    homepage_dir: "{{ wp_root }}/wp-content/themes/motorcade/homepage"
+
+  tasks:
+    - name: Deploy hero copy
+      copy:
+        src: wordpress/homepage/hero-copy.html
+        dest: "{{ homepage_dir }}/hero-copy.html"
+        owner: nginx
+        group: nginx
+        mode: '0644'
+
+    - name: Deploy trust indicators
+      copy:
+        src: wordpress/homepage/trust-indicators.html
+        dest: "{{ homepage_dir }}/trust-indicators.html"
+        owner: nginx
+        group: nginx
+        mode: '0644'
+
+    - name: Deploy hero spacing CSS
+      copy:
+        src: wordpress/homepage/hero-spacing.css
+        dest: "{{ homepage_dir }}/hero-spacing.css"
+        owner: nginx
+        group: nginx
+        mode: '0644'
+
+    - name: Reload nginx
+      service:
+        name: nginx
+        state: reloaded
