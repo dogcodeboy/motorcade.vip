@@ -1,0 +1,126 @@
+---
+# Playbook 32 — Header DOM & Branding Hierarchy Consolidation
+#
+# Goal:
+# - Move the shield logo into the same DOM row as the navigation
+# - Suppress duplicate WordPress Site Identity logo output (by removing old logo call sites)
+# - Keep changes fully repo-managed and reversible
+#
+# Safety:
+# - Creates a timestamped backup of header.php on the server
+# - Validates PHP syntax (php -l) before deployment
+# - Writes a patched copy to /tmp first, then deploys
+#
+- name: "Playbook 32 — Header DOM & Branding Hierarchy Consolidation"
+  hosts: motorcade
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    header_php: "{{ theme_dir }}/header.php"
+
+    backup_root: /var/backups/motorcade
+    pb_id: "32-header-dom-branding"
+
+    # Where to save a copy on the control machine (your laptop/workstation) for committing.
+    # This is intentionally NOT inside docs/checkpoints/ (those are created after verification).
+    local_artifacts_dir: "{{ playbook_dir }}/../artifacts/{{ pb_id }}"
+
+  pre_tasks:
+    - name: Ensure required packages exist (php-cli for syntax check)
+      ansible.builtin.package:
+        name:
+          - php-cli
+        state: present
+
+    - name: Assert header.php exists
+      ansible.builtin.stat:
+        path: "{{ header_php }}"
+      register: header_stat
+
+    - name: Fail if header.php missing
+      ansible.builtin.fail:
+        msg: "Expected header.php at {{ header_php }} but it was not found. Aborting."
+      when: not header_stat.stat.exists
+
+  tasks:
+    - name: Create server backup directory
+      ansible.builtin.file:
+        path: "{{ backup_root }}/{{ pb_id }}/{{ ansible_date_time.iso8601_basic_short }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Backup current header.php on the server
+      ansible.builtin.copy:
+        src: "{{ header_php }}"
+        dest: "{{ backup_root }}/{{ pb_id }}/{{ ansible_date_time.iso8601_basic_short }}/header.php"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Ensure local artifacts directory exists (control machine)
+      delegate_to: localhost
+      become: false
+      ansible.builtin.file:
+        path: "{{ local_artifacts_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Fetch current header.php to control machine for record/commit
+      ansible.builtin.fetch:
+        src: "{{ header_php }}"
+        dest: "{{ local_artifacts_dir }}/header.php"
+        flat: true
+
+    - name: Upload patcher script
+      ansible.builtin.copy:
+        src: "../files/scripts/patch_header_php.py"
+        dest: "/tmp/patch_header_php.py"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create patched header.php (in /tmp)
+      ansible.builtin.command:
+        cmd: "python3 /tmp/patch_header_php.py {{ header_php }} /tmp/header.php.patched"
+      register: patch_result
+      changed_when: "'PATCHED' in patch_result.stdout"
+
+    - name: Validate patched PHP syntax
+      ansible.builtin.command:
+        cmd: "php -l /tmp/header.php.patched"
+      register: php_lint
+      changed_when: false
+
+    - name: Fail if PHP lint failed
+      ansible.builtin.fail:
+        msg: "PHP lint failed for patched header.php: {{ php_lint.stdout }} {{ php_lint.stderr }}"
+      when: php_lint.rc != 0
+
+    - name: Deploy patched header.php
+      ansible.builtin.copy:
+        src: "/tmp/header.php.patched"
+        dest: "{{ header_php }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+
+    - name: Reload NGINX
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
+  post_tasks:
+    - name: Report backup + artifact locations
+      ansible.builtin.debug:
+        msg:
+          - "Server backup: {{ backup_root }}/{{ pb_id }}/{{ ansible_date_time.iso8601_basic_short }}/header.php"
+          - "Local artifact: {{ local_artifacts_dir }}/header.php"
+
