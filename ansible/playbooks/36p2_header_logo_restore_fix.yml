@@ -1,0 +1,124 @@
+---
+# Playbook 36p2 - Restore header logo safely (fallback badge) + correct controller paths
+#
+# Root cause fixed:
+#   Previous playbooks used src: files/... which Ansible resolves relative to the *playbook directory*
+#   (ansible/playbooks/files/...) instead of ansible/files/.... This playbook uses playbook_dir
+#   to build correct absolute controller paths.
+#
+# What it does:
+#   - Backs up remote header.php (timestamped)
+#   - Ensures fallback badge image exists and is deployed to theme assets
+#   - Deploys patched header.php that falls back to the badge when WP Custom Logo is not set
+#   - Reloads nginx/php-fpm best-effort
+
+- name: Playbook 36p2 - Restore header logo (fallback badge + sizing) [path-safe]
+  hosts: motorcade-web
+  become: true
+
+  vars:
+    theme_slug: motorcade-trust
+    theme_path: "/var/www/motorcade/wp-content/themes/{{ theme_slug }}"
+
+    # Controller repo paths (path-safe)
+    controller_files_root: "{{ playbook_dir }}/../files"
+    controller_theme_root: "{{ controller_files_root }}/themes/{{ theme_slug }}"
+    controller_badge_src: "{{ controller_files_root }}/wp/assets/images/motorcade/branding/motorcade-badge-64.png"
+
+    remote_brand_dir: "{{ theme_path }}/assets/images/brand"
+    remote_badge_path: "{{ remote_brand_dir }}/motorcade-badge-64.png"
+
+  tasks:
+    - name: Gather facts
+      ansible.builtin.setup:
+
+    - name: Assert remote theme exists
+      ansible.builtin.stat:
+        path: "{{ theme_path }}"
+      register: theme_stat
+
+    - name: Abort if remote theme not found
+      ansible.builtin.assert:
+        that:
+          - theme_stat.stat.exists
+          - theme_stat.stat.isdir
+        fail_msg: "Theme directory not found: {{ theme_path }}"
+
+    - name: Assert controller theme header.php exists (path-safe)
+      ansible.builtin.stat:
+        path: "{{ controller_theme_root }}/header.php"
+      delegate_to: localhost
+      become: false
+      register: header_local
+
+    - name: Assert controller badge source exists (path-safe)
+      ansible.builtin.stat:
+        path: "{{ controller_badge_src }}"
+      delegate_to: localhost
+      become: false
+      register: badge_local
+
+    - name: Fail fast if controller files are missing
+      ansible.builtin.assert:
+        that:
+          - header_local.stat.exists
+          - badge_local.stat.exists
+        fail_msg: >-
+          Missing controller files. Expected:
+          - {{ controller_theme_root }}/header.php
+          - {{ controller_badge_src }}
+      delegate_to: localhost
+      become: false
+
+    - name: Backup remote header.php (timestamped)
+      ansible.builtin.copy:
+        src: "{{ theme_path }}/header.php"
+        dest: "{{ theme_path }}/header.php.bak.{{ lookup('pipe','date +%Y%m%d-%H%M%S') }}"
+        remote_src: true
+        mode: preserve
+
+    - name: Ensure remote brand asset directory exists
+      ansible.builtin.file:
+        path: "{{ remote_brand_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Deploy fallback badge image to theme assets
+      ansible.builtin.copy:
+        src: "{{ controller_badge_src }}"
+        dest: "{{ remote_badge_path }}"
+        mode: "0644"
+
+    - name: Deploy patched header.php (adds fallback logo if WP Custom Logo not set)
+      ansible.builtin.copy:
+        src: "{{ controller_theme_root }}/header.php"
+        dest: "{{ theme_path }}/header.php"
+        mode: "0644"
+
+    - name: Best-effort reload php-fpm (Amazon Linux 2023)
+      ansible.builtin.shell: |
+        set -e
+        if systemctl list-units --type=service | grep -qE 'php-fpm'; then
+          systemctl reload php-fpm || systemctl restart php-fpm
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Best-effort reload nginx
+      ansible.builtin.shell: |
+        set -e
+        if systemctl list-units --type=service | grep -qE 'nginx'; then
+          systemctl reload nginx || systemctl restart nginx
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Backed up remote header.php (timestamped)."
+          - "Deployed badge to: {{ remote_badge_path }}"
+          - "Deployed header.php with safe fallback logo." 
+          - "Verify: https://motorcade.vip (logo should appear even if WP Custom Logo is unset)."

@@ -13,12 +13,17 @@
   <div class="mc-container">
     <div class="mc-header-inner">
       <div class="mc-brand">
-        <?php if (function_exists('the_custom_logo') && has_custom_logo()) { the_custom_logo(); } ?>
-        <?php if (!has_custom_logo()) : ?>
-            <a class="mc-brand-fallback" href="<?php echo esc_url(home_url('/')); ?>" aria-label="<?php echo esc_attr(get_bloginfo('name')); ?>">
-                <img class="mc-brand-fallback__img" src="<?php echo esc_url(get_stylesheet_directory_uri().'/assets/images/brand/motorcade-badge-64.png'); ?>" alt="<?php echo esc_attr(get_bloginfo('name')); ?>" />
-            </a>
-        <?php endif; ?>
+        <?php
+          // Prefer WP Custom Logo, but provide a safe theme-local fallback so the header never renders blank.
+          if (function_exists('the_custom_logo') && has_custom_logo()) {
+            the_custom_logo();
+          } else {
+            $fallback = esc_url(get_template_directory_uri() . '/assets/images/brand/motorcade-badge-64.png');
+            echo '<a class="custom-logo-link" href="' . esc_url(home_url('/')) . '" rel="home">'
+               . '<img class="custom-logo" src="' . $fallback . '" alt="' . esc_attr(get_bloginfo('name')) . '" width="48" height="48" />'
+               . '</a>';
+          }
+        ?>
         <div class="mc-brand-title"><?php bloginfo('name'); ?></div>
       </div>
 
