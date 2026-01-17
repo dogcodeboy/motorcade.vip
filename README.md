@@ -6,6 +6,18 @@ and allow safe session handoffs when changes become complex (themes, Ansible, in
 ⚠️ **Always read the latest checkpoint before making changes.**
 
 ### ✅ Latest Checkpoint (ACTIVE)
+## Latest checkpoint
+
+- **2026-01-17** — Header logo regression hard-fixed (Playbook 37c) and server-side theme backup created.
+  - Checkpoint: [docs/checkpoints/2026-01-17/README.md](docs/checkpoints/2026-01-17/README.md)
+  - Playbook: [ansible/playbooks/37c_header_logo_absolute_fix.yml](ansible/playbooks/37c_header_logo_absolute_fix.yml)
+  - Playbook docs: [docs/playbooks/37c-header-logo-absolute-fix.md](docs/playbooks/37c-header-logo-absolute-fix.md)
+
+➡️ This is the **current source of truth**.
+
+---
+
+### Previous Checkpoints
 **📂 docs/checkpoints/2026-01-16/**  
 Status:
 - Site ONLINE and stable
@@ -14,13 +26,10 @@ Status:
 - Emergency rollback archive verified
 - Safe handoff created before logo repair to prevent regressions
 
-➡️ This is the **current source of truth**.
-
----
-
-### Previous Checkpoints
 - **docs/checkpoints/2026-01-12/**  
   Initial stabilization, early theme + Ansible groundwork
+  - **2026-01-16** — Risk section readability stabilized; header logo restore pending: [docs/checkpoints/2026-01-16](docs/checkpoints/2026-01-16/)
+- **2026-01-15** — Prior handoff: [docs/checkpoints/2026-01-15](docs/checkpoints/2026-01-15/)
 
 ---
 
@@ -32,15 +41,6 @@ Status:
 
 <<<<<<< HEAD
 
-## Latest checkpoint
-
-- **2026-01-17** — Header logo regression hard-fixed (Playbook 37c) and server-side theme backup created.
-  - Checkpoint: [docs/checkpoints/2026-01-17/README.md](docs/checkpoints/2026-01-17/README.md)
-  - Playbook: [ansible/playbooks/37c_header_logo_absolute_fix.yml](ansible/playbooks/37c_header_logo_absolute_fix.yml)
-  - Playbook docs: [docs/playbooks/37c-header-logo-absolute-fix.md](docs/playbooks/37c-header-logo-absolute-fix.md)
-## Latest Checkpoints
-- **2026-01-16** — Risk section readability stabilized; header logo restore pending: [docs/checkpoints/2026-01-16](docs/checkpoints/2026-01-16/)
-- **2026-01-15** — Prior handoff: [docs/checkpoints/2026-01-15](docs/checkpoints/2026-01-15/)
 =======
 >>>>>>> origin/main
 
