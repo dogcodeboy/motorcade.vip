@@ -1,0 +1,85 @@
+---
+# Playbook 36p7 - Force header logo visibility (defensive override)
+# Fixes cases where later styling (playbook ~35) accidentally hides the logo.
+# Safe/idempotent: adds a scoped CSS override block at end of theme style.css.
+
+- name: "36p7 - Force header logo visibility (defensive CSS override)"
+  hosts: motorcade_web
+  become: true
+  vars:
+    theme_style: "/var/www/motorcade/wp-content/themes/motorcade-trust/style.css"
+    patch_begin: "/* MC PATCH 36p7: HEADER LOGO VISIBILITY OVERRIDE */"
+    patch_end: "/* END MC PATCH 36p7: HEADER LOGO VISIBILITY OVERRIDE */"
+    patch_block: |
+      /* MC PATCH 36p7: HEADER LOGO VISIBILITY OVERRIDE */
+      /* Purpose: ensure header logo never disappears due to overly-broad selectors */
+      .mc-header .mc-brand,
+      .mc-header .mc-brandbar,
+      .mc-header .custom-logo-link,
+      .mc-header a.custom-logo-link,
+      .mc-header img.custom-logo,
+      .mc-header .custom-logo {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+
+      /* Keep logo at intended size without stretching */
+      .mc-header a.custom-logo-link,
+      .mc-header img.custom-logo {
+        height: auto !important;
+        width: auto !important;
+        max-height: 34px !important;
+        max-width: 240px !important;
+      }
+
+      /* Ensure the brand container can occupy space in flex layouts */
+      .mc-header .mc-brand {
+        min-height: 34px;
+        min-width: 34px;
+        align-items: center;
+      }
+
+      /* If a later patch hides the brand container, override it here */
+      body .mc-header .mc-brand {
+        display: flex !important;
+      }
+
+      /* END MC PATCH 36p7: HEADER LOGO VISIBILITY OVERRIDE */
+
+  tasks:
+    - name: Stat theme style.css
+      ansible.builtin.stat:
+        path: "{{ theme_style }}"
+      register: style_stat
+
+    - name: Fail if theme style.css missing
+      ansible.builtin.fail:
+        msg: "Theme style.css not found at {{ theme_style }}"
+      when: not style_stat.stat.exists
+
+    - name: Backup style.css (timestamped)
+      ansible.builtin.copy:
+        src: "{{ theme_style }}"
+        dest: "{{ theme_style }}.bak-{{ lookup('pipe','date +%Y%m%d-%H%M%S') }}"
+        remote_src: true
+      when: style_stat.stat.exists
+
+    - name: Remove any previous 36p7 block (if present)
+      ansible.builtin.replace:
+        path: "{{ theme_style }}"
+        regexp: "(?s)\\/\\* MC PATCH 36p7: HEADER LOGO VISIBILITY OVERRIDE \\*\\/.*?\\/\\* END MC PATCH 36p7: HEADER LOGO VISIBILITY OVERRIDE \\*\\/\\n?"
+        replace: ""
+
+    - name: Append 36p7 header logo visibility override block at EOF
+      ansible.builtin.blockinfile:
+        path: "{{ theme_style }}"
+        marker: ""
+        insertafter: EOF
+        block: "{{ patch_block }}"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Inserted defensive header logo visibility override into {{ theme_style }}"
+          - "Hard refresh (Ctrl+Shift+R) and verify https://motorcade.vip"

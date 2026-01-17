@@ -1,0 +1,48 @@
+
+---
+- name: 37a - Authoritative header logo render + lock
+  hosts: motorcade-web-01
+  become: true
+
+  vars:
+    theme_dir: /var/www/motorcade/wp-content/themes/motorcade-trust
+    backup_dir: /home/ec2-user/backups/motorcade
+
+  tasks:
+    - name: Ensure backup directory exists
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+
+    - name: Backup live theme
+      archive:
+        path: "{{ theme_dir }}"
+        dest: "{{ backup_dir }}/motorcade-trust-37a-{{ ansible_date_time.iso8601_basic }}.tar.gz"
+        format: gz
+
+    - name: Force authoritative logo CSS (lockdown)
+      blockinfile:
+        path: "{{ theme_dir }}/style.css"
+        marker: "/* {mark} MC PATCH 37A LOGO LOCKDOWN */"
+        block: |
+          .mc-brand,
+          .mc-brand img,
+          .custom-logo-link,
+          .custom-logo {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            height: auto !important;
+            width: auto !important;
+            max-height: 64px !important;
+            z-index: 9999 !important;
+            position: relative !important;
+          }
+
+    - name: Reload nginx
+      service:
+        name: nginx
+        state: reloaded

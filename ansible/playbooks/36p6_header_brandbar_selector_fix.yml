@@ -1,0 +1,49 @@
+---
+- name: "36p6 - Fix header logo hidden by overly-broad brandbar selector (style.css patch)"
+  hosts: motorcade
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_path: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    style_css: "{{ theme_path }}/style.css"
+
+  tasks:
+    - name: Stat theme style.css
+      stat:
+        path: "{{ style_css }}"
+      register: style_stat
+
+    - name: Fail if style.css missing
+      fail:
+        msg: "style.css not found at {{ style_css }}"
+      when: not style_stat.stat.exists
+
+    - name: Backup style.css (timestamped)
+      copy:
+        src: "{{ style_css }}"
+        dest: "{{ style_css }}.bak-{{ lookup('pipe','date +%Y%m%d-%H%M%S') }}"
+        remote_src: true
+
+    - name: Narrow risky selector (mc-brandbar + mc-brand) to only apply at body root
+      replace:
+        path: "{{ style_css }}"
+        regexp: "mc-brandbar\\s*\\+\\s*\\.mc-brand\\s*\\{\\s*display:\\s*none\\s*!important;\\s*\\}"
+        replace: "body > .mc-brandbar + .mc-brand { display: none !important; }"
+
+    - name: Ensure header brand container is always visible (override)
+      blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MC PATCH 36p6: HEADER BRAND ALWAYS VISIBLE */"
+        insertafter: EOF
+        block: |
+          /* Ensure in-header brand is never hidden by global cleanup rules */
+          .mc-header .mc-brand { display: flex !important; }
+          .mc-header .mc-brand img { display: block !important; }
+
+    - name: Summary
+      debug:
+        msg:
+          - "Patched {{ style_css }} to stop hiding header logo."
+          - "Hard refresh (Ctrl+Shift+R) and verify https://motorcade.vip"

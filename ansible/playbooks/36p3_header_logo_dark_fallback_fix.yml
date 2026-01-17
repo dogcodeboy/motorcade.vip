@@ -1,0 +1,40 @@
+---
+- name: Playbook 36p3 - Restore header logo (dark fallback, safe)
+  hosts: motorcade_web
+  become: true
+  vars:
+    theme_root: /var/www/motorcade/wp-content/themes/motorcade-trust
+    header_php: "{{ theme_root }}/header.php"
+    brand_dir: "{{ theme_root }}/assets/images/brand"
+
+  tasks:
+    - name: Ensure brand directory exists
+      ansible.builtin.file:
+        path: "{{ brand_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy dark header logo asset
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/branding/motorcade-header-logo-dark.png"
+        dest: "{{ brand_dir }}/motorcade-header-logo-dark.png"
+        mode: "0644"
+
+    - name: Backup header.php (timestamped)
+      ansible.builtin.copy:
+        src: "{{ header_php }}"
+        dest: "{{ header_php }}.bak-{{ ansible_date_time.iso8601 }}"
+        remote_src: true
+
+    - name: Switch fallback asset from badge to dark header logo (filename-only)
+      ansible.builtin.replace:
+        path: "{{ header_php }}"
+        regexp: 'motorcade-badge-64\.png'
+        replace: 'motorcade-header-logo-dark.png'
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Dark header logo deployed to theme assets/images/brand/."
+          - "header.php fallback updated: motorcade-badge-64.png -> motorcade-header-logo-dark.png"
+          - "Verify: https://motorcade.vip"

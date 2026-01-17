@@ -1,0 +1,158 @@
+---
+- name: "37 - Header logo lockdown + live theme backup (motorcade-trust)"
+  hosts: motorcade-web-01
+  become: true
+
+  vars:
+    theme_dir: "/var/www/motorcade/wp-content/themes/motorcade-trust"
+    style_css: "{{ theme_dir }}/style.css"
+    header_php: "{{ theme_dir }}/header.php"
+
+    # Server-side backup location (ec2-user-owned)
+    backup_root: "/home/ec2-user/backups/motorcade"
+
+    # The logo file name that should exist in theme assets.
+    # (We do NOT hard-depend on WP custom-logo functions.)
+    header_logo_rel: "assets/images/brand/motorcade-header-logo-dark.png"
+
+    # Marker for our defensive CSS block
+    css_marker: "MC PATCH 37: HEADER LOGO LOCKDOWN"
+
+  tasks:
+    - name: Gather facts
+      ansible.builtin.setup:
+
+    - name: Stat theme directory
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_dir_stat
+
+    - name: Fail if theme directory missing
+      ansible.builtin.fail:
+        msg: "Theme directory not found: {{ theme_dir }}"
+      when: not theme_dir_stat.stat.exists
+
+    - name: Stat style.css
+      ansible.builtin.stat:
+        path: "{{ style_css }}"
+      register: style_stat
+
+    - name: Fail if style.css missing
+      ansible.builtin.fail:
+        msg: "style.css not found: {{ style_css }}"
+      when: not style_stat.stat.exists
+
+    - name: Backup style.css (timestamped)
+      ansible.builtin.copy:
+        src: "{{ style_css }}"
+        dest: "{{ style_css }}.bak-{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+        mode: preserve
+
+    # --- CSS LOCKDOWN ------------------------------------------------------
+    # We do TWO things:
+    # 1) Remove/neutralize any over-broad "brandbar + brand" hiding rules
+    # 2) Append a highly-specific override block that forces the logo visible
+
+    - name: Neutralize dangerous selector that can hide the header brand (if present)
+      ansible.builtin.replace:
+        path: "{{ style_css }}"
+        # Replace ONLY the exact problematic pattern if it exists.
+        regexp: '(?m)^\s*(body\s*>\s*)?\.mc-brandbar\s*\+\s*\.mc-brand\s*\{[^}]*display\s*:\s*none\s*!important\s*;?[^}]*\}\s*$'
+        replace: '/* {{ css_marker }} - neutralized: .mc-brandbar + .mc-brand display none */'
+      ignore_errors: true
+
+    - name: Ensure any theme "brandbar" container can be hidden without affecting header logo
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} {{ css_marker }} */"
+        insertafter: EOF
+        block: |
+          /* {{ css_marker }}
+             Goal: Make the header logo unbreakable.
+             - Future theme updates may hide .mc-brand or .custom-logo by accident.
+             - We force visibility, size, and stacking only inside the header.
+          */
+
+          /* 1) Never hide the header brand container */
+          header .mc-brand,
+          .mc-header .mc-brand,
+          .site-header .mc-brand {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+          }
+
+          /* 2) Hide ONLY the legacy brandbar (if it exists), not the brand/logo */
+          header .mc-brandbar,
+          .mc-header .mc-brandbar,
+          .site-header .mc-brandbar {
+            display: none !important;
+          }
+
+          /* 3) Force the logo/link visible and sized correctly */
+          header .custom-logo-link,
+          header .custom-logo,
+          header .mc-brand img,
+          .mc-header .custom-logo-link,
+          .mc-header .custom-logo,
+          .mc-header .mc-brand img,
+          .site-header .custom-logo-link,
+          .site-header .custom-logo,
+          .site-header .mc-brand img {
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            max-height: 34px !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+            position: relative !important;
+            z-index: 9999 !important;
+          }
+
+          /* 4) If the theme outputs text next to the mark (site title), keep it suppressed */
+          header .mc-brand-title,
+          header .site-title,
+          header .site-description {
+            display: none !important;
+          }
+
+          /* 5) Optional: subtle "frame" to visually separate nav bar (psychology: stability) */
+          .site-header,
+          header.site-header {
+            border-bottom: 1px solid rgba(20, 70, 140, 0.22);
+          }
+
+          /* END {{ css_marker }} */
+
+    # --- SERVER-SIDE BACKUP ------------------------------------------------
+    - name: Ensure server backup directory exists
+      ansible.builtin.file:
+        path: "{{ backup_root }}"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+
+    - name: Create live theme tar.gz backup (timestamped)
+      ansible.builtin.command:
+        cmd: "tar -C /var/www/motorcade/wp-content/themes -czf {{ backup_root }}/motorcade-trust-{{ ansible_date_time.iso8601_basic_short }}.tar.gz motorcade-trust"
+      args:
+        creates: "{{ backup_root }}/motorcade-trust-{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
+
+    - name: Ensure backup ownership (ec2-user)
+      ansible.builtin.file:
+        path: "{{ backup_root }}/motorcade-trust-{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
+        owner: ec2-user
+        group: ec2-user
+        mode: '0644'
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Patched {{ style_css }} with {{ css_marker }} (defensive header logo visibility)."
+          - "Backup created: {{ backup_root }}/motorcade-trust-{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
+          - "Hard refresh: Ctrl+Shift+R then verify https://motorcade.vip"

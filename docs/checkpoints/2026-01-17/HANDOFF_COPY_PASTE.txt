@@ -1,0 +1,22 @@
+SESSION HANDOFF (paste into new ChatGPT session)
+
+Project: motorcade.vip (AWS AL2023 + WordPress + Ansible)
+
+Current state (2026-01-17):
+- Header logo regression resolved using Playbook 37c.
+- Defensive CSS appended to theme style.css to prevent future hiding/collapse.
+- Server-side theme backup created:
+  /home/ec2-user/backups/motorcade/motorcade-trust-20260117T041539.tar.gz
+
+Repo updates included in this handoff zip:
+- ansible/playbooks/37c_header_logo_absolute_fix.yml
+- docs/playbooks/37c-header-logo-absolute-fix.md
+- docs/checkpoints/2026-01-17/*
+- README.md updated with clickable links
+
+Next steps (one playbook per session rule):
+1) Quick responsive header sanity check across breakpoints.
+2) Continue homepage polish sequence; ensure future styling playbooks do not remove the “MC PATCH 37C” block in style.css.
+
+Start here:
+- docs/checkpoints/2026-01-17/06_next_session.md

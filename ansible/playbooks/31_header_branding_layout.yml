@@ -50,7 +50,7 @@
           /* 3) If a legacy duplicate brand element exists outside the header, hide it */
           body > .mc-brand,
           body > .mc-brandbar,
-          .mc-brandbar + .mc-brand { display: none !important; }
+          body > .mc-brandbar + .mc-brand { display: none !important; }
 
           /* 4) Suppress WP Site Identity text, but do NOT hide the logo */
           .site-title,

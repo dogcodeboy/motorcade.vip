@@ -1,0 +1,153 @@
+---
+- name: "37b - Header logo HARD FIX (authoritative header.php render + defensive CSS + server backups)"
+  hosts: motorcade-web-01
+  become: true
+  gather_facts: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    header_php: "{{ theme_dir }}/header.php"
+    style_css: "{{ theme_dir }}/style.css"
+    logo_rel_path: assets/images/brand/motorcade-header-logo-dark.png
+    logo_abs_path: "{{ theme_dir }}/{{ logo_rel_path }}"
+    backup_dir: /home/ec2-user/backups/motorcade
+    ts: "{{ ansible_date_time.iso8601_basic_short }}"
+
+  tasks:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+
+    - name: Verify theme files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ header_php }}"
+        - "{{ style_css }}"
+      register: theme_files
+
+    - name: Fail if header.php or style.css missing
+      ansible.builtin.fail:
+        msg: "Missing required theme file: {{ item.stat.path }}"
+      loop: "{{ theme_files.results }}"
+      when: not item.stat.exists
+
+    - name: Verify logo asset exists
+      ansible.builtin.stat:
+        path: "{{ logo_abs_path }}"
+      register: logo_stat
+
+    - name: Fail if logo asset missing
+      ansible.builtin.fail:
+        msg: "Logo asset missing at {{ logo_abs_path }}"
+      when: not logo_stat.stat.exists
+
+    - name: Backup header.php (timestamped)
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ header_php }}"
+        dest: "{{ backup_dir }}/{{ theme_slug }}-header.php.{{ ts }}.bak"
+        owner: ec2-user
+        group: ec2-user
+        mode: '0644'
+
+    - name: Backup style.css (timestamped)
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ style_css }}"
+        dest: "{{ backup_dir }}/{{ theme_slug }}-style.css.{{ ts }}.bak"
+        owner: ec2-user
+        group: ec2-user
+        mode: '0644'
+
+    - name: Remove any prior MC PATCH 37A block from header.php (if present)
+      ansible.builtin.blockinfile:
+        path: "{{ header_php }}"
+        marker: "<!-- {mark} MC PATCH 37A -->"
+        state: absent
+
+    - name: Remove any prior MC PATCH 37 block from style.css (if present)
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MC PATCH 37: HEADER LOGO LOCKDOWN */"
+        state: absent
+
+    - name: Remove any prior MC PATCH 37A block from style.css (if present)
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MC PATCH 37A */"
+        state: absent
+
+    - name: Inject authoritative header logo markup (absolute, cannot be hidden)
+      ansible.builtin.blockinfile:
+        path: "{{ header_php }}"
+        marker: "<!-- {mark} MC PATCH 37B: HEADER LOGO AUTHORITATIVE -->"
+        insertafter: "<header"
+        firstmatch: true
+        block: |
+          <?php /* MC PATCH 37B: Authoritative header logo render (hard-lock) */ ?>
+          <a class="mc-header-logo-lock" href="<?php echo esc_url( home_url( '/' ) ); ?>" aria-label="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>">
+            <img src="<?php echo esc_url( get_stylesheet_directory_uri() . '/{{ logo_rel_path }}' ); ?>" alt="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>" />
+          </a>
+
+    - name: Append defensive CSS to guarantee visibility + prevent overlap
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MC PATCH 37B: HEADER LOGO HARD FIX */"
+        insertafter: EOF
+        block: |
+          
+          /* 37B: HARD FIX — make header logo render authoritatively and stay visible */
+          .site-header, #masthead { position: relative; }
+          .mc-header-logo-lock {
+            display: block !important;
+            position: absolute !important;
+            left: 16px !important;
+            top: 10px !important;
+            z-index: 99999 !important;
+            height: 36px !important;
+            width: auto !important;
+            pointer-events: auto !important;
+          }
+          .mc-header-logo-lock img {
+            display: block !important;
+            height: 36px !important;
+            width: auto !important;
+            max-width: 220px !important;
+            object-fit: contain !important;
+          }
+          /* keep nav from sitting on top of the logo */
+          .main-navigation, nav.main-navigation { padding-left: 110px !important; }
+          @media (max-width: 900px) {
+            .mc-header-logo-lock { top: 8px !important; height: 30px !important; }
+            .mc-header-logo-lock img { height: 30px !important; max-width: 180px !important; }
+            .main-navigation, nav.main-navigation { padding-left: 95px !important; }
+          }
+          @media (max-width: 600px) {
+            .mc-header-logo-lock { top: 8px !important; left: 12px !important; height: 26px !important; }
+            .mc-header-logo-lock img { height: 26px !important; max-width: 160px !important; }
+            .main-navigation, nav.main-navigation { padding-left: 85px !important; }
+          }
+          /* optional: subtle frame for the header bar */
+          .site-header, #masthead {
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+          }
+
+    - name: Reload nginx (best effort)
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      ignore_errors: true
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Applied MC PATCH 37B (authoritative header logo + defensive CSS)"
+          - "Backups saved: {{ backup_dir }}/{{ theme_slug }}-header.php.{{ ts }}.bak and {{ backup_dir }}/{{ theme_slug }}-style.css.{{ ts }}.bak"
+          - "Hard refresh site (Ctrl+Shift+R): https://motorcade.vip"

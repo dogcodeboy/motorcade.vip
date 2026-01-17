@@ -13,7 +13,7 @@
 #   - Reloads nginx/php-fpm best-effort
 
 - name: Playbook 36p2 - Restore header logo (fallback badge + sizing) [path-safe]
-  hosts: motorcade-web
+  hosts: motorcade_web
   become: true
 
   vars:

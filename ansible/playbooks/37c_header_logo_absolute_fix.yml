@@ -1,0 +1,143 @@
+---
+- name: "37c - Header logo absolute visibility fix + server-side backup (motorcade-trust)"
+  hosts: motorcade-web-01
+  become: true
+  vars:
+    theme_slug: motorcade-trust
+    wp_root: /var/www/motorcade
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    style_css: "{{ theme_dir }}/style.css"
+    header_php: "{{ theme_dir }}/header.php"
+    backup_root: /home/ec2-user/backups/motorcade
+    ts: "{{ lookup('pipe','date +%Y%m%dT%H%M%S') }}"
+
+    # Marker blocks to remove (legacy patches we used while iterating)
+    remove_markers:
+      - "MC PATCH 36P6"
+      - "MC PATCH 36P7"
+      - "MC PATCH 37"
+      - "MC PATCH 37A"
+      - "MC PATCH 37B"
+
+  tasks:
+    - name: Gather facts
+      setup:
+
+    - name: Fail if theme directory missing
+      stat:
+        path: "{{ theme_dir }}"
+      register: theme_stat
+
+    - name: Assert theme dir exists
+      assert:
+        that:
+          - theme_stat.stat.exists
+        fail_msg: "Theme directory not found: {{ theme_dir }}"
+
+    - name: Ensure backup directory exists
+      file:
+        path: "{{ backup_root }}"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: "0755"
+
+    - name: Create live theme tar.gz backup (server-side, tar)
+      shell: |
+        set -e
+        cd "{{ wp_root }}/wp-content/themes"
+        sudo tar czf "{{ backup_root }}/{{ theme_slug }}-{{ ts }}.tar.gz" "{{ theme_slug }}"
+        sudo chown ec2-user:ec2-user "{{ backup_root }}/{{ theme_slug }}-{{ ts }}.tar.gz"
+      args:
+        executable: /bin/bash
+
+    - name: Backup style.css (timestamped)
+      copy:
+        remote_src: true
+        src: "{{ style_css }}"
+        dest: "{{ style_css }}.bak-{{ ts }}"
+        mode: preserve
+
+    - name: Backup header.php (timestamped)
+      copy:
+        remote_src: true
+        src: "{{ header_php }}"
+        dest: "{{ header_php }}.bak-{{ ts }}"
+        mode: preserve
+
+    - name: Remove legacy patch blocks from style.css (if present)
+      shell: |
+        set -e
+        f="{{ style_css }}"
+        for m in {{ remove_markers | map('quote') | join(' ') }}; do
+          # Remove blockinfile markers if present
+          sed -i "/BEGIN ${m}/,/END ${m}/d" "$f" || true
+        done
+      args:
+        executable: /bin/bash
+
+    - name: Apply authoritative header logo visibility CSS (cannot be hidden)
+      blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MC PATCH 37C: HEADER LOGO ABSOLUTE VISIBILITY */"
+        insertafter: EOF
+        block: |
+          /*
+           * MC PATCH 37C: Make the header logo un-hideable.
+           * Targets both WordPress Site Identity logo markup and our theme logo classes.
+           */
+
+          /* Ensure the header/branding containers cannot collapse */
+          header.site-header, .site-header, .site-branding, .mc-brand {
+            min-height: 48px !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+
+          /* Force WordPress custom logo to render and be visible */
+          .site-header .custom-logo-link,
+          .site-header a.custom-logo-link,
+          .site-header .custom-logo,
+          .site-header img.custom-logo {
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: relative !important;
+            z-index: 9999 !important;
+            max-height: 44px !important;
+            width: auto !important;
+            height: auto !important;
+          }
+
+          /* Force our theme's header logo asset to be visible if present */
+          .site-header img.motorcade-header-logo-dark,
+          .site-header img#motorcade-header-logo-dark,
+          .site-header img[src*="motorcade-header-logo-dark"],
+          .site-header .mc-brand img,
+          .site-header .mc-brand a img {
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: relative !important;
+            z-index: 9999 !important;
+            max-height: 44px !important;
+            width: auto !important;
+            height: auto !important;
+          }
+
+          /* If any rule tries to hide brandbars, don't let it take the logo with it */
+          body > .mc-brandbar { display: none !important; }
+
+    - name: Reload nginx (best-effort)
+      service:
+        name: nginx
+        state: reloaded
+      ignore_errors: true
+
+    - name: Summary
+      debug:
+        msg:
+          - "Applied MC PATCH 37C CSS to {{ style_css }}"
+          - "Backups: {{ style_css }}.bak-{{ ts }} and {{ header_php }}.bak-{{ ts }}"
+          - "Server backup: {{ backup_root }}/{{ theme_slug }}-{{ ts }}.tar.gz"
+          - "Hard refresh your browser (Ctrl+Shift+R)"

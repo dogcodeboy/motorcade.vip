@@ -1,0 +1,67 @@
+---
+- name: Playbook 36p5 - Force header logo markup (theme asset; no WP dependency) [v2 path-safe]
+  hosts: motorcade_web
+  become: true
+  vars:
+    theme_root: /var/www/motorcade/wp-content/themes/motorcade-trust
+    header_php: "{{ theme_root }}/header.php"
+    logo_rel: "/assets/images/brand/motorcade-header-logo-dark.png"
+
+    # Exact strings as currently present in header.php (no regex; avoids YAML escaping issues)
+    old_logo_line: "<?php if (function_exists('the_custom_logo') && has_custom_logo()) { the_custom_logo(); } ?>"
+    old_title_div: "<div class=\"mc-brand-title\"><?php bloginfo('name'); ?></div>"
+
+    new_logo_block: |
+      <?php
+        // Motorcade: Always render theme-asset header logo for consistent branding.
+        // WP Custom Logo can be re-enabled later by reverting this patch.
+        $mc_logo = esc_url( get_template_directory_uri() . '{{ logo_rel }}' );
+        echo '<a class="custom-logo-link" href="' . esc_url( home_url('/') ) . '" rel="home">'
+           . '<img class="custom-logo" src="' . $mc_logo . '" alt="' . esc_attr( get_bloginfo('name') ) . '" width="160" height="48" />'
+           . '</a>';
+      ?>
+
+  tasks:
+    - name: Backup header.php (timestamped)
+      ansible.builtin.copy:
+        src: "{{ header_php }}"
+        dest: "{{ header_php }}.bak-{{ ansible_date_time.iso8601 }}"
+        remote_src: true
+
+    - name: Read current header.php
+      ansible.builtin.slurp:
+        src: "{{ header_php }}"
+      register: header_slurp
+
+    - name: Build patched header.php content (logo + remove brand title)
+      ansible.builtin.set_fact:
+        header_current: "{{ header_slurp.content | b64decode }}"
+        header_patched: >-
+          {{
+            (header_slurp.content | b64decode)
+              | replace(old_logo_line, new_logo_block | trim)
+              | replace(old_title_div, '')
+          }}
+
+    - name: Fail if expected logo line was not found (safety guard)
+      ansible.builtin.assert:
+        that:
+          - header_current != header_patched
+        fail_msg: >
+          Expected logo line not found in header.php, so no safe patch was applied.
+          Please inspect {{ header_php }} and update old_logo_line accordingly.
+
+    - name: Write patched header.php back to theme
+      ansible.builtin.copy:
+        dest: "{{ header_php }}"
+        content: "{{ header_patched }}
+"
+        mode: "0644"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Backed up header.php (timestamped)."
+          - "Forced header logo markup to use theme asset: {{ logo_rel }}"
+          - "Removed mc-brand-title text node."
+          - "Hard refresh (Ctrl+Shift+R) and verify https://motorcade.vip"

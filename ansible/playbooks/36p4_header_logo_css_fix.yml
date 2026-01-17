@@ -1,0 +1,58 @@
+---
+- name: Playbook 36p4 - Header logo visibility + sizing (scoped CSS only)
+  hosts: motorcade_web
+  become: true
+  vars:
+    theme_root: /var/www/motorcade/wp-content/themes/motorcade-trust
+    style_css: "{{ theme_root }}/style.css"
+
+  tasks:
+    - name: Backup style.css (timestamped)
+      ansible.builtin.copy:
+        src: "{{ style_css }}"
+        dest: "{{ style_css }}.bak-{{ ansible_date_time.iso8601 }}"
+        remote_src: true
+
+    - name: Ensure header logo CSS patch is present (scoped to .mc-header only)
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MC PATCH 36p4: HEADER LOGO */"
+        block: |
+          /* Keep logo visible and properly sized in the header (scoped; no global effects) */
+          .mc-header .mc-brand{
+            display:flex !important;
+            align-items:center;
+            gap:12px;
+            min-width: 160px;
+          }
+          .mc-header .mc-brand a.custom-logo-link{
+            display:flex;
+            align-items:center;
+            line-height:1;
+          }
+          .mc-header .mc-brand img.custom-logo,
+          .mc-header .mc-brand img.custom-logo-dark,
+          .mc-header .mc-brand img.custom-logo-light{
+            display:block !important;
+            height:42px;
+            width:auto;
+            max-height:42px;
+          }
+          @media (max-width: 768px){
+            .mc-header .mc-brand{ min-width: 120px; }
+            .mc-header .mc-brand img.custom-logo,
+            .mc-header .mc-brand img.custom-logo-dark,
+            .mc-header .mc-brand img.custom-logo-light{
+              height:34px;
+              max-height:34px;
+            }
+          }
+          /* Match final render: no duplicate text next to the mark */
+          .mc-header .mc-brand-title{ display:none !important; }
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Backed up style.css (timestamped)."
+          - "Inserted scoped header logo CSS patch (MC PATCH 36p4)."
+          - "Hard refresh the site (Ctrl+Shift+R) to verify header logo appears."

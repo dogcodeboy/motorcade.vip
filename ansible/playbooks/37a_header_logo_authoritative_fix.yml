@@ -1,0 +1,25 @@
+---
+- name: 37a - Authoritative header logo render + backup
+  hosts: motorcade-web-01
+  become: true
+  tasks:
+    - name: Ensure logo is always visible (authoritative override)
+      blockinfile:
+        path: /var/www/motorcade/wp-content/themes/motorcade-trust/style.css
+        marker: "/* {mark} MC LOGO AUTHORITATIVE */"
+        block: |
+          header .custom-logo,
+          header .custom-logo-link,
+          header .mc-brand img {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            height: auto !important;
+            max-height: 64px !important;
+            z-index: 9999 !important;
+          }
+
+    - name: Backup live theme
+      archive:
+        path: /var/www/motorcade/wp-content/themes/motorcade-trust
+        dest: /home/ec2-user/backups/motorcade-trust-{{ ansible_date_time.iso8601 }}.tar.gz
