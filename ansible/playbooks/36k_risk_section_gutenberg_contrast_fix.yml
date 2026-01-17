@@ -1,0 +1,140 @@
+---
+# Playbook 36k — Fix "Built for real-world risk" section readability (Gutenberg-safe)
+#
+# Why 36j didn't work:
+# - The homepage section is built with Gutenberg blocks (cover/columns/groups), not the custom .mc-card markup.
+# - So selectors like .mc-card, .mc-grid-3 never matched.
+#
+# What this does:
+# - Injects a HIGH-SPECIFICITY, SCOPED patch inside the .mc-risk section only.
+# - Forces text to a readable light color, and adds a subtle dark overlay on cover images to ensure contrast.
+# - Idempotent: uses blockinfile markers.
+
+- name: "Playbook 36k — Risk section readability fix (Gutenberg)"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    style_css: "{{ theme_dir }}/style.css"
+
+    mc_risk_css_block: |
+      /* === MOTORCADE PATCH: mc-risk Gutenberg readability (36k) ============ */
+      /* Scope EVERYTHING to .mc-risk so we don't change other sections */
+
+      /* Section container */
+      .mc-risk{
+        background: linear-gradient(180deg, #0b1020 0%, #071a33 60%, #061526 100%);
+        border-radius: 24px;
+        padding: 26px 24px;
+        border: 1px solid rgba(255,255,255,.10);
+        box-shadow: 0 18px 46px rgba(2,10,24,.35);
+      }
+
+      /* Force readable text colors inside the section (covers Gutenberg markup) */
+      .mc-risk,
+      .mc-risk :where(h1,h2,h3,h4,h5,h6,p,span,li,strong,em),
+      .mc-risk :where(a){
+        color: rgba(255,255,255,.92) !important;
+      }
+      .mc-risk :where(p,li,span){
+        color: rgba(255,255,255,.82) !important;
+      }
+      .mc-risk :where(a){
+        color: rgba(151,210,255,.96) !important;
+        text-decoration: none;
+        font-weight: 800;
+      }
+      .mc-risk :where(a:hover){ text-decoration: underline; }
+
+      /* Gutenberg Cover blocks: ensure enough overlay behind text */
+      .mc-risk .wp-block-cover,
+      .mc-risk .wp-block-cover-image{
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.12);
+        box-shadow: 0 14px 30px rgba(0,0,0,.22);
+      }
+
+      /* The cover overlay layer. Some themes use ::before; Gutenberg uses .wp-block-cover__background */
+      .mc-risk .wp-block-cover__background,
+      .mc-risk .wp-block-cover::before,
+      .mc-risk .wp-block-cover-image::before{
+        background-color: rgba(0,0,0,.48) !important;
+        opacity: 1 !important;
+      }
+
+      /* Inner container padding for readability */
+      .mc-risk .wp-block-cover__inner-container{
+        padding: 16px 16px 18px;
+      }
+
+      /* If the card text is still getting a theme color, override it hard */
+      .mc-risk .wp-block-cover__inner-container *{
+        color: rgba(255,255,255,.90) !important;
+      }
+
+      /* Make "Learn more.." read like a link */
+      .mc-risk .wp-block-cover__inner-container a,
+      .mc-risk .wp-block-cover__inner-container .wp-block-button__link{
+        color: rgba(151,210,255,.96) !important;
+      }
+
+      @media (max-width: 900px){
+        .mc-risk{ padding: 20px 16px; border-radius: 18px; }
+      }
+      /* === END MOTORCADE PATCH ============================================ */
+
+  tasks:
+    - name: "Gather theme style facts"
+      ansible.builtin.stat:
+        path: "{{ style_css }}"
+      register: style_stat
+
+    - name: "Abort if theme style.css is missing"
+      ansible.builtin.fail:
+        msg: "Missing {{ style_css }} on remote. Verify active theme slug is '{{ theme_slug }}'."
+      when: not style_stat.stat.exists
+
+    - name: "Backup remote style.css (timestamped)"
+      ansible.builtin.copy:
+        src: "{{ style_css }}"
+        dest: "{{ style_css }}.bak.{{ lookup('pipe','date +%Y%m%d-%H%M%S') }}"
+        remote_src: true
+        mode: preserve
+
+    - name: "Inject/Update mc-risk Gutenberg patch in style.css (idempotent)"
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MOTORCADE_MC_RISK_36K */"
+        block: "{{ mc_risk_css_block }}"
+        insertafter: EOF
+        create: false
+
+    - name: "Best-effort reload php-fpm if present (Amazon Linux 2023)"
+      ansible.builtin.shell: |
+        set -e
+        if command -v systemctl >/dev/null 2>&1; then
+          systemctl list-unit-files | grep -q '^php-fpm\\.service' && systemctl reload php-fpm || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: "Best-effort reload nginx"
+      ansible.builtin.shell: |
+        set -e
+        if command -v systemctl >/dev/null 2>&1; then
+          systemctl list-unit-files | grep -q '^nginx\\.service' && systemctl reload nginx || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: "Summary"
+      ansible.builtin.debug:
+        msg:
+          - "Injected mc-risk Gutenberg readability patch into: {{ style_css }}"
+          - "Verify: https://motorcade.vip (Built for real-world risk card text should now be readable)"

@@ -44,7 +44,7 @@ a:hover{text-decoration:underline}
 }
 .mc-header-inner{
   display:flex;align-items:center;justify-content:space-between;
-  gap:12px;padding:12px 0;flex-wrap:nowrap;
+  gap:12px;padding:12px 0;flex-wrap:wrap;
 }
 .mc-brand{display:flex;align-items:center;gap:10px;min-width:220px;flex:0 1 auto}
 .mc-brand-title{font-weight:900;letter-spacing:-.3px;color:var(--mc-blue-900);line-height:1.1}
@@ -89,7 +89,6 @@ a:hover{text-decoration:underline}
   .mc-grid-3{grid-template-columns:1fr}
   .mc-nav ul{justify-content:flex-start}
   .mc-ctas{justify-content:flex-start}
-  .mc-header-inner{flex-wrap:wrap}
 }
 
 .mc-steps,.mc-bullets{padding-left:18px;color:var(--mc-slate-700);line-height:1.7}
@@ -112,233 +111,49 @@ a:hover{text-decoration:underline}
 .mc-footer a{color:var(--mc-blue-700)}
 .mc-footer-note{max-width:720px;color:var(--mc-slate-500);line-height:1.6}
 
-/* ===============================
-   PLAYBOOK 36 — HOMEPAGE RENDER
-   (literal image filenames; no re-crop, no effects)
-   =============================== */
-
-.mc-home{padding:18px 0 34px}
-
-.mc-hero{
-  position:relative;
-  border-radius:22px;
-  overflow:hidden;
-  min-height:420px;
-  box-shadow:0 18px 40px rgba(2,6,23,.18);
-  border:1px solid rgba(226,232,240,.65);
+/* BEGIN MC-RISK-CARD-READABILITY (36n)
+   Targets the Gutenberg "Built for real-world risk" section after JS tags it with .mc-risk.
+*/
+.mc-risk,
+.mc-risk .wp-block-cover__inner-container {
+  color: rgba(255,255,255,0.92) !important;
 }
-.mc-hero-bg{
-  position:absolute;inset:0;
-  background-size:cover;
-  background-position:right center;
-  transform:scale(1.02);
+.mc-risk h1,
+.mc-risk h2,
+.mc-risk h3,
+.mc-risk h4,
+.mc-risk h5,
+.mc-risk h6,
+.mc-risk p,
+.mc-risk li,
+.mc-risk a,
+.mc-risk .wp-block-button__link {
+  color: rgba(255,255,255,0.92) !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.55);
 }
-.mc-hero-overlay{
-  position:absolute;inset:0;
-  background:linear-gradient(90deg, rgba(8,18,38,.86) 0%, rgba(8,18,38,.62) 35%, rgba(8,18,38,.25) 62%, rgba(8,18,38,0) 100%);
-}
-.mc-hero-inner{
-  position:relative;
-  padding:48px 44px;
-  max-width:720px;
-}
-.mc-hero-kicker{
-  margin:0 0 10px;
-  font-size:12px;
-  letter-spacing:.18em;
-  text-transform:uppercase;
-  color:rgba(226,232,240,.72);
-  font-weight:900;
-}
-.mc-hero h1{
-  margin:0 0 12px;
-  font-size:44px;
-  line-height:1.06;
-  letter-spacing:-.7px;
-  color:#fff;
-}
-.mc-hero p{
-  margin:0 0 18px;
-  color:rgba(226,232,240,.82);
-  font-size:16px;
-  line-height:1.7;
-  max-width:560px;
-}
-.mc-hero-ctas{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 14px}
-.mc-btn-pill{border-radius:14px;padding:11px 16px}
-.mc-btn-dark{
-  background:rgba(15,23,42,.55);
-  color:#fff;
-  border:1px solid rgba(226,232,240,.2);
-  box-shadow:none;
-}
-.mc-btn-dark:hover{background:rgba(15,23,42,.7);text-decoration:none}
-
-.mc-badges{display:flex;gap:10px;flex-wrap:wrap}
-.mc-badge{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:7px 10px;
-  border-radius:12px;
-  background:rgba(15,23,42,.42);
-  border:1px solid rgba(226,232,240,.16);
-  color:rgba(226,232,240,.86);
-  font-size:13px;
-  font-weight:700;
-}
-.mc-badge svg{width:16px;height:16px;opacity:.9}
-
-.mc-section-split{padding:22px 0}
-.mc-two-col{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;align-items:start}
-.mc-assess-title{margin:0 0 8px;font-size:28px;letter-spacing:-.3px}
-.mc-checks{margin:14px 0 0;padding:0;list-style:none}
-.mc-checks li{display:flex;gap:10px;align-items:flex-start;color:var(--mc-slate-700);line-height:1.7;margin:8px 0}
-.mc-checks .mc-check{flex:0 0 auto;width:18px;height:18px;margin-top:3px;border-radius:6px;background:rgba(26,102,179,.12);display:grid;place-items:center;border:1px solid rgba(26,102,179,.22)}
-.mc-check svg{width:13px;height:13px;color:var(--mc-blue-700)}
-
-.mc-mini-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.mc-mini-card{border-radius:18px;overflow:hidden;border:1px solid var(--mc-slate-200);background:#fff;box-shadow:var(--mc-shadow)}
-.mc-mini-img{height:110px;background-size:cover;background-position:center}
-.mc-mini-body{padding:12px 12px 14px}
-.mc-mini-head{display:flex;align-items:center;gap:10px;margin:0 0 6px}
-.mc-mini-icon{width:34px;height:34px;border-radius:12px;background:var(--mc-blue-100);display:grid;place-items:center;border:1px solid rgba(26,102,179,.22)}
-.mc-mini-icon svg{width:18px;height:18px;color:var(--mc-blue-700)}
-.mc-mini-title{font-weight:900;color:var(--mc-slate-900);line-height:1.15}
-.mc-mini-body p{margin:0;color:var(--mc-slate-700);line-height:1.55;font-size:13.5px}
-
-.mc-dark{
-  margin-top:22px;
-  border-radius:22px;
-  overflow:hidden;
-  background:linear-gradient(180deg, #0b1528 0%, #0a1324 55%, #0a1222 100%);
-  padding:26px 22px;
-}
-.mc-dark h2{margin:0 0 6px;color:#fff;font-size:28px;letter-spacing:-.3px}
-.mc-dark p{margin:0 0 18px;color:rgba(226,232,240,.78);max-width:720px;line-height:1.7}
-
-.mc-service-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.mc-service{border-radius:18px;overflow:hidden;background:#fff;border:1px solid rgba(226,232,240,.75);box-shadow:0 12px 26px rgba(2,6,23,.22)}
-.mc-service-img{height:150px;background-size:cover;background-position:center}
-.mc-service-body{padding:14px}
-.mc-service-head{display:flex;gap:10px;align-items:center;margin:0 0 8px}
-.mc-service-pill{width:34px;height:34px;border-radius:12px;background:#f1f5f9;display:grid;place-items:center;border:1px solid var(--mc-slate-200)}
-.mc-service-pill svg{width:18px;height:18px;color:var(--mc-slate-700)}
-.mc-service-title{font-weight:900;color:var(--mc-slate-900);letter-spacing:-.2px}
-.mc-service-body p{margin:0 0 10px;color:var(--mc-slate-700);line-height:1.6}
-.mc-service-body a{font-weight:800}
-
-@media (max-width:980px){
-  .mc-two-col{grid-template-columns:1fr}
-  .mc-mini-cards{grid-template-columns:1fr 1fr}
-}
-@media (max-width:900px){
-  .mc-hero-inner{padding:34px 18px}
-  .mc-hero{min-height:440px}
-  .mc-hero h1{font-size:36px}
-  .mc-mini-cards{grid-template-columns:1fr}
-  .mc-service-grid{grid-template-columns:1fr}
+.mc-risk a {
+  text-decoration-color: rgba(255,255,255,0.55);
 }
 
-.mc-hero{
-  position:relative;
-  border-radius:24px;
-  overflow:hidden;
-  min-height:460px;
-  background:
-    linear-gradient(90deg, rgba(10,16,32,.86) 0%, rgba(10,16,32,.62) 36%, rgba(10,16,32,.22) 62%, rgba(10,16,32,0) 100%),
-    var(--mc-hero-image);
-  background-size:cover;
-  background-position:right center;
-  box-shadow:0 18px 48px rgba(2,6,23,.22);
+/* Make the three service cards readable by adding a subtle glass panel behind text blocks. */
+.mc-risk .wp-block-group,
+.mc-risk .wp-block-column {
+  background: rgba(0,0,0,0.18);
+  border-color: rgba(255,255,255,0.10);
 }
 
-.mc-hero-inner{position:relative;z-index:2;padding:34px 34px 26px;max-width:720px}
-.mc-hero-kicker{color:rgba(255,255,255,.72);font-weight:900;letter-spacing:.16em;text-transform:uppercase;font-size:12px;margin:0 0 10px}
-.mc-hero-title{color:#fff;font-weight:900;letter-spacing:-.6px;line-height:1.05;font-size:44px;margin:0 0 10px}
-.mc-hero-sub{color:rgba(255,255,255,.72);line-height:1.7;font-size:16px;margin:0 0 18px;max-width:640px}
-
-.mc-hero-ctas{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 14px}
-.mc-btn-pill{border-radius:14px;padding:10px 16px}
-.mc-btn-outline{
-  background:transparent;
-  color:#e7efff;
-  border:1px solid rgba(231,239,255,.22);
-  box-shadow:none;
+/* Stronger overlay inside the card content area if Gutenberg uses inner containers. */
+.mc-risk .wp-block-group__inner-container {
+  background: rgba(0,0,0,0.20);
+  border-radius: 16px;
+  padding: 12px;
 }
-.mc-btn-outline:hover{background:rgba(255,255,255,.08);text-decoration:none}
 
-.mc-badges{display:flex;gap:10px;flex-wrap:wrap}
-.mc-badge{
-  display:inline-flex;align-items:center;gap:8px;
-  border-radius:12px;
-  padding:7px 10px;
-  background:rgba(15,23,42,.55);
-  border:1px solid rgba(255,255,255,.10);
-  color:rgba(255,255,255,.76);
-  font-weight:700;
-  font-size:12.5px;
+/* Ensure icon badges remain visible */
+.mc-risk .mc-icon-badge,
+.mc-risk .icon-badge {
+  background: rgba(255,255,255,0.90) !important;
+  color: #0b1a33 !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
 }
-.mc-badge svg{width:16px;height:16px;opacity:.92}
-
-.mc-assess{display:grid;grid-template-columns:1.05fr .95fr;gap:18px;align-items:stretch;margin-top:18px}
-.mc-assess h2{margin:0 0 8px;font-size:28px;letter-spacing:-.4px}
-.mc-assess p{margin:0 0 12px;color:var(--mc-slate-700);line-height:1.75}
-.mc-checks{margin:0 0 14px;padding-left:0;list-style:none;color:var(--mc-slate-700)}
-.mc-checks li{display:flex;gap:10px;align-items:flex-start;margin:8px 0;line-height:1.6}
-.mc-check{width:18px;height:18px;border-radius:6px;background:rgba(26,102,179,.14);border:1px solid rgba(26,102,179,.22);display:inline-flex;align-items:center;justify-content:center;flex:0 0 18px;margin-top:2px}
-.mc-check svg{width:12px;height:12px}
-
-.mc-mini-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.mc-mini{
-  border:1px solid var(--mc-slate-200);
-  border-radius:22px;
-  overflow:hidden;
-  background:#fff;
-  box-shadow:var(--mc-shadow);
-}
-.mc-mini img{display:block;width:100%;height:120px;object-fit:cover}
-.mc-mini-body{padding:12px 12px 14px}
-.mc-mini-title{display:flex;gap:10px;align-items:center;font-weight:900;color:var(--mc-slate-900);margin:0 0 4px}
-.mc-mini-title span{font-size:16px}
-.mc-mini-body p{margin:0;color:var(--mc-slate-700);line-height:1.6;font-size:13.5px}
-.mc-mini-ico{width:28px;height:28px;border-radius:10px;border:1px solid var(--mc-slate-200);display:flex;align-items:center;justify-content:center;background:#fff}
-.mc-mini-ico svg{width:16px;height:16px}
-
-.mc-dark{
-  margin-top:18px;
-  border-radius:24px;
-  overflow:hidden;
-  background:linear-gradient(180deg,#0b1428 0%, #0a1222 100%);
-  padding:22px 22px 18px;
-}
-.mc-dark h2{color:#fff;margin:0 0 6px;font-size:28px;letter-spacing:-.4px}
-.mc-dark p{color:rgba(255,255,255,.70);margin:0 0 16px;line-height:1.7}
-
-.mc-services{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.mc-service{
-  border-radius:22px;
-  overflow:hidden;
-  background:#fff;
-  box-shadow:0 14px 38px rgba(2,6,23,.30);
-  border:1px solid rgba(255,255,255,.10);
-  min-height:320px;
-  display:flex;flex-direction:column;
-}
-.mc-service img{width:100%;height:140px;object-fit:cover;display:block}
-.mc-service-body{padding:14px 14px 16px;display:flex;flex-direction:column;gap:8px;flex:1}
-.mc-service-title{display:flex;gap:10px;align-items:center;margin:0;font-weight:900;font-size:18px;color:var(--mc-slate-900)}
-.mc-service-title .mc-mini-ico{border-color:var(--mc-slate-200)}
-.mc-service-body p{margin:0;color:var(--mc-slate-700);line-height:1.65;font-size:14px}
-.mc-service-body a{margin-top:auto;font-weight:900}
-
-@media (max-width:980px){
-  .mc-assess{grid-template-columns:1fr}
-  .mc-mini-cards{grid-template-columns:1fr 1fr}
-  .mc-hero{min-height:440px}
-}
-@media (max-width:720px){
-  .mc-hero-inner{padding:26px 18px 18px}
-  .mc-hero-title{font-size:34px}
-  .mc-mini-cards{grid-template-columns:1fr}
-  .mc-services{grid-template-columns:1fr}
-  .mc-hero{background-position:center right}
-}
+/* END MC-RISK-CARD-READABILITY (36n) */

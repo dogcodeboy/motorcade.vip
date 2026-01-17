@@ -1,0 +1,149 @@
+---
+# Playbook 36f — Header logo + homepage contrast + DPS footer (Ansible-only)
+#
+# Run (example):
+#   cd ansible
+#   ansible-playbook -i inventories/prod/hosts.ini playbooks/36f_header_footer_homepage_fix.yml \
+#     --private-key ~/.ssh/motorcade-key.pem
+#
+# Notes:
+# - This playbook does NOT use wp-admin.
+# - It enforces canonical theme files from this repo onto the server.
+# - It re-asserts the WP custom_logo so the header displays the shield.
+# - It sets the footer license number from `dps_license_number` (if defined),
+#   otherwise the theme falls back to the baked-in default.
+
+- name: "Playbook 36f — Header logo + homepage contrast + DPS footer"
+  hosts: motorcade-web
+  become: true
+  gather_facts: true
+
+  vars:
+    wp_path: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_path }}/wp-content/themes/{{ theme_slug }}"
+    wp_cli: "wp --path={{ wp_path }}"
+
+    # Controller sources (repo-aligned)
+    controller_header_php: "{{ playbook_dir }}/../files/themes/{{ theme_slug }}/header.php"
+    controller_footer_php: "{{ playbook_dir }}/../files/themes/{{ theme_slug }}/footer.php"
+    controller_logo_png: "{{ playbook_dir }}/../files/wp/assets/images/motorcade/branding/motorcade-badge-256.png"
+
+    # Homepage render v2 CSS (repo)
+    controller_homepage_css: "{{ playbook_dir }}/files/wordpress/homepage_render_v2/theme_overrides/homepage_render_v2.css"
+    remote_homepage_css: "{{ theme_dir }}/assets/homepage_render_v2.css"
+
+    # Where we keep branding assets in uploads (so wp-cli can import)
+    uploads_branding_dir: "{{ wp_path }}/wp-content/uploads/motorcade/branding"
+    remote_logo_png: "{{ uploads_branding_dir }}/motorcade-badge-256.png"
+
+  tasks:
+    - name: "Fail fast if theme directory does not exist on remote"
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_dir_stat
+
+    - name: "Abort if theme directory is missing"
+      ansible.builtin.fail:
+        msg: "Theme directory not found on remote: {{ theme_dir }}"
+      when: not theme_dir_stat.stat.exists
+
+    - name: "Deploy canonical header.php (fix logo placement in nav row)"
+      ansible.builtin.copy:
+        src: "{{ controller_header_php }}"
+        dest: "{{ theme_dir }}/header.php"
+        owner: apache
+        group: apache
+        mode: "0644"
+        backup: true
+
+    - name: "Deploy canonical footer.php (adds DPS license line)"
+      ansible.builtin.copy:
+        src: "{{ controller_footer_php }}"
+        dest: "{{ theme_dir }}/footer.php"
+        owner: apache
+        group: apache
+        mode: "0644"
+        backup: true
+
+    - name: "Ensure theme assets directory exists"
+      ansible.builtin.file:
+        path: "{{ theme_dir }}/assets"
+        state: directory
+        owner: apache
+        group: apache
+        mode: "0755"
+
+    - name: "Deploy homepage_render_v2.css (improves Built-for section text contrast)"
+      ansible.builtin.copy:
+        src: "{{ controller_homepage_css }}"
+        dest: "{{ remote_homepage_css }}"
+        owner: apache
+        group: apache
+        mode: "0644"
+        backup: true
+
+    - name: "Ensure uploads branding directory exists"
+      ansible.builtin.file:
+        path: "{{ uploads_branding_dir }}"
+        state: directory
+        owner: apache
+        group: apache
+        mode: "0755"
+
+    - name: "Place logo file in uploads (for wp-cli import)"
+      ansible.builtin.copy:
+        src: "{{ controller_logo_png }}"
+        dest: "{{ remote_logo_png }}"
+        owner: apache
+        group: apache
+        mode: "0644"
+
+    - name: "Read current WP custom_logo theme mod"
+      ansible.builtin.command: "{{ wp_cli }} theme mod get custom_logo"
+      register: custom_logo_get
+      changed_when: false
+      failed_when: false
+
+    - name: "Import logo to Media Library if custom_logo is not set"
+      ansible.builtin.command: "{{ wp_cli }} media import {{ remote_logo_png }} --porcelain"
+      register: logo_import
+      when: custom_logo_get.stdout | trim == "" or custom_logo_get.stdout | trim == "0"
+
+    - name: "Set WP custom_logo theme mod"
+      ansible.builtin.command: "{{ wp_cli }} theme mod set custom_logo {{ logo_import.stdout | trim }}"
+      when: logo_import is defined and (logo_import.stdout | trim) != ""
+
+    - name: "Optionally set DPS license number (WP option motorcade_dps_license)"
+      ansible.builtin.command: "{{ wp_cli }} option update motorcade_dps_license '{{ dps_license_number }}'"
+      when:
+        - dps_license_number is defined
+        - (dps_license_number | string | trim) != ""
+
+    - name: "Flush WordPress object cache"
+      ansible.builtin.command: "{{ wp_cli }} cache flush"
+      register: cache_flush
+      changed_when: "'Success' in (cache_flush.stdout | default(''))"
+      failed_when: false
+
+    - name: "Reload php-fpm if present (ignore if not installed)"
+      ansible.builtin.shell: |
+        set -e
+        if systemctl list-unit-files | grep -q '^php-fpm\\.service'; then
+          systemctl reload php-fpm || systemctl restart php-fpm
+        elif systemctl list-unit-files | grep -q '^php\\d\\d-php-fpm\\.service'; then
+          SVC=$(systemctl list-unit-files | awk '/^php[0-9][0-9]-php-fpm\\.service/{print $1; exit}')
+          systemctl reload "$SVC" || systemctl restart "$SVC"
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+      failed_when: false
+
+    - name: "Summary"
+      ansible.builtin.debug:
+        msg:
+          - "Deployed header.php and footer.php to: {{ theme_dir }}"
+          - "Deployed homepage CSS to: {{ remote_homepage_css }}"
+          - "Logo set? custom_logo now: {{ custom_logo_get.stdout | default('') | trim }}"
+          - "If footer still missing DPS number, set dps_license_number in inventory/group_vars and re-run this playbook."

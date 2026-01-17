@@ -1,0 +1,128 @@
+---
+- name: "Playbook 36g — Header logo sizing + dark-section contrast + DPS footer"
+  hosts: motorcade_web
+  become: true
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+
+    # Desktop header logo sizing (prevents huge/duplicated logo artifacts)
+    header_logo_max_h: 42
+    header_mark_max_h: 18
+
+  pre_tasks:
+    - name: "Fail fast if DPS license number is not configured (legal requirement)"
+      assert:
+        that:
+          - dps_license_number is defined
+          - (dps_license_number | string | length) > 0
+        fail_msg: "Set dps_license_number in ansible/group_vars/motorcade/main.yml (or inventories/prod/group_vars/all.yml)"
+
+    - name: "Check theme directory exists on target"
+      stat:
+        path: "{{ theme_dir }}"
+      register: theme_dir_stat
+
+    - name: "Abort if theme directory missing"
+      assert:
+        that:
+          - theme_dir_stat.stat.exists
+        fail_msg: "Theme directory not found: {{ theme_dir }}"
+
+  tasks:
+    - name: "Backup theme files (style.css, footer.php)"
+      copy:
+        src: "{{ item }}"
+        dest: "{{ item }}.bak.{{ ansible_date_time.date }}-{{ ansible_date_time.time }}"
+        remote_src: true
+        mode: preserve
+      loop:
+        - "{{ theme_dir }}/style.css"
+        - "{{ theme_dir }}/footer.php"
+
+    - name: "Inject CSS fixes (header logo sizing + dark-section text contrast)"
+      blockinfile:
+        path: "{{ theme_dir }}/style.css"
+        marker: "/* {mark} MOTORCADE PB36G */"
+        insertafter: EOF
+        block: |
+          /* Header: keep logo + wordmark constrained so it can never blow up the layout */
+          .site-header .brand img,
+          .site-header .mc-brand img {
+            max-height: {{ header_logo_max_h }}px;
+            height: auto;
+            width: auto;
+            object-fit: contain;
+          }
+          .site-header .mc-wordmark,
+          .site-header .brand-mark,
+          .site-header .mc-brand .wordmark {
+            max-height: {{ header_mark_max_h }}px;
+            height: auto;
+            width: auto;
+            object-fit: contain;
+          }
+
+          /* Prevent any accidental SVG/IMG icons from expanding in feature lists */
+          .mc-hero-badges img,
+          .mc-hero-badges svg,
+          .mc-feature-list img,
+          .mc-feature-list svg {
+            max-width: 24px;
+            max-height: 24px;
+          }
+
+          /* Built for real-world risk: ensure readable contrast inside dark cards/section */
+          .mc-section-dark,
+          .mc-section-dark * {
+            color: rgba(255,255,255,0.92);
+          }
+          .mc-section-dark p,
+          .mc-section-dark .muted,
+          .mc-section-dark .subcopy {
+            color: rgba(255,255,255,0.72);
+          }
+          .mc-section-dark a {
+            color: rgba(255,255,255,0.92);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+          }
+
+    - name: "Ensure DPS license number is displayed in footer"
+      blockinfile:
+        path: "{{ theme_dir }}/footer.php"
+        marker: "<!-- {mark} MOTORCADE DPS -->"
+        insertbefore: "</footer>"
+        block: |
+          <div class="mc-legal" style="margin-top:12px; font-size:12px; opacity:.8;">
+            Texas DPS Private Security License: <?php echo esc_html('{{ dps_license_number }}'); ?>
+          </div>
+
+    - name: "Reload php-fpm if present (Amazon Linux 2023)"
+      shell: |
+        set -e
+        if systemctl list-unit-files | grep -q '^php-fpm\\.service'; then
+          systemctl reload php-fpm || systemctl restart php-fpm
+        elif systemctl list-unit-files | grep -q '^php8\\.2-fpm\\.service'; then
+          systemctl reload php8.2-fpm || systemctl restart php8.2-fpm
+        elif systemctl list-unit-files | grep -q '^php81-php-fpm\\.service'; then
+          systemctl reload php81-php-fpm || systemctl restart php81-php-fpm
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: "Reload nginx"
+      service:
+        name: nginx
+        state: reloaded
+      ignore_errors: true
+
+  post_tasks:
+    - name: "Summary"
+      debug:
+        msg:
+          - "CSS patch applied to: {{ theme_dir }}/style.css"
+          - "DPS license injected into: {{ theme_dir }}/footer.php"
+          - "Verify: https://motorcade.vip (hero + dark section readable; footer shows DPS)"

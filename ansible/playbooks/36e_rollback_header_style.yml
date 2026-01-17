@@ -1,0 +1,115 @@
+---
+# Playbook 36e — Roll back header.php + style.css to last known-good backups on the server
+# Purpose: Undo the broken header/style deployment that caused oversized logos/icons and layout regressions.
+# Strategy:
+#  - In the active theme dir, locate the newest backup for header.php and style.css
+#    (style.css.bak.* / style.css.broken.* / style.css.pre_*; same for header.php)
+#  - Restore those backups over the live files.
+#  - Reload php-fpm (best-effort).
+
+- name: Playbook 36e — Roll back header/style to last known-good backups
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+
+    # Backup filename globs to consider (ordered; we still pick the newest by mtime)
+    style_backup_globs:
+      - "{{ theme_dir }}/style.css.pre_*"
+      - "{{ theme_dir }}/style.css.broken.*"
+      - "{{ theme_dir }}/style.css.bak.*"
+
+    header_backup_globs:
+      - "{{ theme_dir }}/header.php.pre_*"
+      - "{{ theme_dir }}/header.php.broken.*"
+      - "{{ theme_dir }}/header.php.bak.*"
+
+  tasks:
+    - name: Ensure theme directory exists
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_stat
+
+    - name: Abort if theme directory is missing
+      ansible.builtin.fail:
+        msg: "Theme directory not found: {{ theme_dir }}"
+      when: not theme_stat.stat.exists
+
+    - name: Find newest style.css backup candidate
+      ansible.builtin.shell: |
+        set -e
+        cd "{{ theme_dir }}"
+        # Expand globs safely; ignore missing
+        ls -1t style.css.pre_* style.css.broken.* style.css.bak.* 2>/dev/null | head -n 1
+      args:
+        executable: /bin/bash
+      register: style_backup
+      changed_when: false
+
+    - name: Abort if no style.css backup was found
+      ansible.builtin.fail:
+        msg: "No style.css backup found in {{ theme_dir }} (expected style.css.bak.* or style.css.broken.* or style.css.pre_*)"
+      when: style_backup.stdout | trim == ""
+
+    - name: Find newest header.php backup candidate
+      ansible.builtin.shell: |
+        set -e
+        cd "{{ theme_dir }}"
+        ls -1t header.php.pre_* header.php.broken.* header.php.bak.* 2>/dev/null | head -n 1
+      args:
+        executable: /bin/bash
+      register: header_backup
+      changed_when: false
+
+    - name: Abort if no header.php backup was found
+      ansible.builtin.fail:
+        msg: "No header.php backup found in {{ theme_dir }} (expected header.php.bak.* or header.php.broken.* or header.php.pre_*)"
+      when: header_backup.stdout | trim == ""
+
+    - name: Restore style.css from newest backup
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ theme_dir }}/{{ style_backup.stdout | trim }}"
+        dest: "{{ theme_dir }}/style.css"
+        owner: nginx
+        group: nginx
+        mode: '0644'
+
+    - name: Restore header.php from newest backup
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ theme_dir }}/{{ header_backup.stdout | trim }}"
+        dest: "{{ theme_dir }}/header.php"
+        owner: nginx
+        group: nginx
+        mode: '0644'
+
+    - name: Best-effort reload php-fpm if present (Amazon Linux 2023)
+      ansible.builtin.shell: |
+        set -e
+        if systemctl list-unit-files | grep -q '^php-fpm\.service'; then
+          systemctl reload php-fpm || systemctl restart php-fpm
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Best-effort reload nginx
+      ansible.builtin.shell: |
+        set -e
+        if systemctl list-unit-files | grep -q '^nginx\.service'; then
+          systemctl reload nginx || systemctl restart nginx
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Restored style.css from: {{ style_backup.stdout | trim }}"
+          - "Restored header.php from: {{ header_backup.stdout | trim }}"
+          - "Verify: https://motorcade.vip (homepage should return to the previous look)"

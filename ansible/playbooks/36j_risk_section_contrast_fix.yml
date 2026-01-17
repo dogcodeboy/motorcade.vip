@@ -1,0 +1,122 @@
+---
+# Playbook 36j — Fix "Built for real‑world risk" card readability
+# - Adds a scoped CSS patch for .mc-risk so card titles/body/links are readable.
+# - Safe/idempotent: inserts a marked block into the active theme style.css.
+# - Amazon Linux 2023 friendly: uses systemd when present.
+
+- name: "Playbook 36j — Fix risk section card readability"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    style_css: "{{ theme_dir }}/style.css"
+
+    mc_risk_css_block: |
+      /* === MOTORCADE PATCH: mc-risk readability (36j) ======================= */
+      .mc-risk{
+        background:linear-gradient(180deg,#0b1020 0%, #081a33 55%, #071526 100%);
+        border-radius:24px;
+        padding:26px 24px;
+        color:rgba(255,255,255,.92);
+        box-shadow:0 18px 46px rgba(2,10,24,.35);
+        border:1px solid rgba(255,255,255,.08);
+      }
+      .mc-risk h2{
+        color:#ffffff;
+        margin:0 0 10px;
+        letter-spacing:-.2px;
+      }
+      .mc-risk p{
+        color:rgba(255,255,255,.80);
+      }
+
+      /* Cards inside the risk section */
+      .mc-risk .mc-grid-3{gap:14px;}
+      .mc-risk .mc-card{
+        background:rgba(255,255,255,.06);
+        border:1px solid rgba(255,255,255,.12);
+        box-shadow:0 14px 30px rgba(0,0,0,.22);
+        overflow:hidden;
+      }
+      .mc-risk .mc-card *{
+        color:rgba(255,255,255,.88);
+      }
+      .mc-risk .mc-card h3,
+      .mc-risk .mc-card .mc-card__title,
+      .mc-risk .mc-card .mc-kicker{
+        color:#ffffff !important;
+      }
+      .mc-risk .mc-card .mc-card__desc,
+      .mc-risk .mc-card p{
+        color:rgba(255,255,255,.78) !important;
+      }
+      .mc-risk .mc-card a{
+        color:rgba(151,210,255,.95) !important;
+        text-decoration:none;
+        font-weight:800;
+      }
+      .mc-risk .mc-card a:hover{ text-decoration:underline; }
+
+      /* Make the overlayed image cards readable */
+      .mc-risk .mc-card img{ display:block; width:100%; height:auto; }
+      .mc-risk .mc-card .mc-card-pad{ padding:16px; }
+
+      @media (max-width: 900px){
+        .mc-risk{ padding:20px 16px; }
+      }
+      /* === END MOTORCADE PATCH ============================================ */
+
+  tasks:
+    - name: "Gather theme style facts"
+      ansible.builtin.stat:
+        path: "{{ style_css }}"
+      register: style_stat
+
+    - name: "Abort if theme style.css is missing"
+      ansible.builtin.fail:
+        msg: "Missing {{ style_css }} on remote. Verify the active theme slug is '{{ theme_slug }}'."
+      when: not style_stat.stat.exists
+
+    - name: "Backup remote style.css (timestamped)"
+      ansible.builtin.copy:
+        src: "{{ style_css }}"
+        dest: "{{ style_css }}.bak.{{ lookup('pipe','date +%Y%m%d-%H%M%S') }}"
+        remote_src: true
+        mode: preserve
+
+    - name: "Inject/Update mc-risk contrast patch in style.css (idempotent)"
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MOTORCADE_MC_RISK_36J */"
+        block: "{{ mc_risk_css_block }}"
+        insertafter: EOF
+        create: false
+
+    - name: "Best-effort reload php-fpm if present (Amazon Linux 2023)"
+      ansible.builtin.shell: |
+        set -e
+        if command -v systemctl >/dev/null 2>&1; then
+          systemctl list-unit-files | grep -q '^php-fpm\.service' && systemctl reload php-fpm || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: "Best-effort reload nginx"
+      ansible.builtin.shell: |
+        set -e
+        if command -v systemctl >/dev/null 2>&1; then
+          systemctl list-unit-files | grep -q '^nginx\.service' && systemctl reload nginx || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: "Summary"
+      ansible.builtin.debug:
+        msg:
+          - "Injected mc-risk readability patch into: {{ style_css }}"
+          - "Verify: https://motorcade.vip (Built for real-world risk cards should be readable)"

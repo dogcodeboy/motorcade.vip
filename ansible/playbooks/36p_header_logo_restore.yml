@@ -1,0 +1,76 @@
+---
+- name: "Playbook 36p - Restore header logo (fallback badge + sizing)"
+  hosts: motorcade_web
+  become: true
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_root: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    remote_header: "{{ theme_root }}/header.php"
+    remote_style: "{{ theme_root }}/style.css"
+    badge_rel: assets/images/brand/motorcade-badge-64.png
+    remote_badge: "{{ theme_root }}/{{ badge_rel }}"
+
+  tasks:
+    - name: Gather theme file facts
+      ansible.builtin.stat:
+        path: "{{ theme_root }}"
+      register: theme_dir
+
+    - name: Abort if theme directory is missing
+      ansible.builtin.fail:
+        msg: "Theme directory not found: {{ theme_root }}"
+      when: not theme_dir.stat.exists
+
+    - name: Backup remote header.php (timestamped)
+      ansible.builtin.copy:
+        src: "{{ remote_header }}"
+        dest: "{{ remote_header }}.bak.{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+      when: theme_dir.stat.exists
+
+    - name: Ensure brand asset directory exists
+      ansible.builtin.file:
+        path: "{{ theme_root }}/assets/images/brand"
+        state: directory
+        mode: "0755"
+
+    - name: Deploy badge image (fallback logo)
+      ansible.builtin.copy:
+        src: "files/themes/motorcade-trust/{{ badge_rel }}"
+        dest: "{{ remote_badge }}"
+        mode: "0644"
+
+    - name: Deploy header.php that includes a safe fallback logo
+      ansible.builtin.copy:
+        src: files/themes/motorcade-trust/header.php
+        dest: "{{ remote_header }}"
+        mode: "0644"
+
+    - name: Inject CSS to keep header logo visible and properly sized
+      ansible.builtin.blockinfile:
+        path: "{{ remote_style }}"
+        marker: "/* {mark} MC_HEADER_LOGO_36P */"
+        insertafter: EOF
+        block: |
+          
+          /* Keep header logo present, aligned, and sized */
+          .mc-brand{display:flex;align-items:center;gap:12px;min-width:0;}
+          .mc-brand .custom-logo-link,.mc-brand .mc-logo-fallback{display:inline-flex;align-items:center;}
+          .mc-brand img.custom-logo,.mc-brand .mc-logo-fallback img{height:44px;max-height:44px;width:auto;display:block;}
+          @media (max-width: 900px){
+            .mc-brand img.custom-logo,.mc-brand .mc-logo-fallback img{height:38px;max-height:38px;}
+          }
+
+    - name: Best-effort reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      failed_when: false
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Deployed header.php + badge: {{ remote_badge }}"
+          - "Injected MC_HEADER_LOGO_36P CSS into: {{ remote_style }}"
+          - "Hard-refresh browser (Ctrl+F5) and verify the badge appears left of the menu."

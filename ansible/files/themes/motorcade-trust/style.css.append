@@ -1,0 +1,8 @@
+/* === MC_HEADER_LOGO_ROW_FIX (Playbook 36c) === */
+@media (min-width: 901px){
+  .mc-header-inner{display:flex;align-items:center;flex-wrap:nowrap;}
+  .mc-brand{flex:0 0 auto;}
+  .mc-nav{flex:1 1 auto;}
+}
+.mc-brand .custom-logo{height:28px;width:auto;}
+/* === /MC_HEADER_LOGO_ROW_FIX === */

@@ -1,0 +1,79 @@
+---
+- name: Playbook 36i — Fix homepage “Built for real-world risk” contrast
+  hosts: motorcade_web
+  become: true
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    style_css: "{{ theme_dir }}/style.css"
+    local_override_css: "{{ playbook_dir }}/files/theme_overrides/homepage_risk_contrast_v1.css"
+
+  tasks:
+    - name: Fail fast if controller override CSS is missing
+      delegate_to: localhost
+      become: false
+      ansible.builtin.stat:
+        path: "{{ local_override_css }}"
+      register: _css
+
+    - name: Abort if controller override CSS is missing
+      delegate_to: localhost
+      become: false
+      ansible.builtin.assert:
+        that:
+          - _css.stat.exists
+        fail_msg: "Missing controller file: {{ local_override_css }}"
+
+    - name: Gather theme file facts
+      ansible.builtin.stat:
+        path: "{{ style_css }}"
+      register: _style
+
+    - name: Abort if remote theme style.css is missing
+      ansible.builtin.assert:
+        that:
+          - _style.stat.exists
+        fail_msg: "Remote theme style.css not found at {{ style_css }}"
+
+    - name: Backup remote style.css (timestamped)
+      ansible.builtin.copy:
+        src: "{{ style_css }}"
+        dest: "{{ style_css }}.bak.{{ lookup('pipe','date +%Y%m%d-%H%M%S') }}"
+        remote_src: true
+        mode: preserve
+
+    - name: Ensure risk-section contrast patch is present in style.css (idempotent)
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MOTORCADE_RISK_CONTRAST_PATCH */"
+        insertafter: EOF
+        block: "{{ lookup('file', local_override_css) }}"
+
+    - name: Best-effort reload php-fpm (Amazon Linux 2023)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if systemctl list-unit-files | grep -q '^php-fpm\\.service'; then
+          systemctl reload php-fpm || systemctl restart php-fpm
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+      failed_when: false
+
+    - name: Best-effort reload nginx
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if systemctl list-unit-files | grep -q '^nginx\\.service'; then
+          systemctl reload nginx || systemctl restart nginx
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+      failed_when: false
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Applied risk-section contrast patch to: {{ style_css }}"
+          - "Verify: https://motorcade.vip (Built for real-world risk cards should have readable text)"

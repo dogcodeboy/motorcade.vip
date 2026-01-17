@@ -14,6 +14,11 @@
     <div class="mc-header-inner">
       <div class="mc-brand">
         <?php if (function_exists('the_custom_logo') && has_custom_logo()) { the_custom_logo(); } ?>
+        <?php if (!has_custom_logo()) : ?>
+            <a class="mc-brand-fallback" href="<?php echo esc_url(home_url('/')); ?>" aria-label="<?php echo esc_attr(get_bloginfo('name')); ?>">
+                <img class="mc-brand-fallback__img" src="<?php echo esc_url(get_stylesheet_directory_uri().'/assets/images/brand/motorcade-badge-64.png'); ?>" alt="<?php echo esc_attr(get_bloginfo('name')); ?>" />
+            </a>
+        <?php endif; ?>
         <div class="mc-brand-title"><?php bloginfo('name'); ?></div>
       </div>
 
@@ -29,6 +34,7 @@
       </nav>
 
       <div class="mc-ctas">
+        <a class="mc-btn mc-btn-ghost" href="/security-assessment/">Request an Assessment</a>
         <a class="mc-btn" href="/contact/">Talk to Security</a>
       </div>
     </div>

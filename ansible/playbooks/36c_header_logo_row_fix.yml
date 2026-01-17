@@ -1,0 +1,127 @@
+---
+# Playbook 36c — Fix header logo row placement (repo-aligned)
+#
+# Goal:
+# - Ensure the WP custom logo stays in the SAME ROW as the nav + CTA on desktop.
+# - Make the repo the source of truth (no wp-admin).
+#
+# This playbook deploys these repo files to the live theme directory:
+#   ansible/files/themes/motorcade-trust/header.php
+#   ansible/files/themes/motorcade-trust/style.css
+#
+# It also timestamps backups on the remote host.
+
+- name: Playbook 36c — Fix header logo row placement (repo-aligned)
+  hosts: motorcade_web
+  become: true
+  gather_facts: true
+
+  vars:
+    wp_root: /var/www/motorcade
+    theme_dir: /var/www/motorcade/wp-content/themes/motorcade-trust
+    controller_theme_src: "{{ playbook_dir }}/../files/themes/motorcade-trust"
+    ts: "{{ lookup('pipe','date +%Y%m%d-%H%M%S') }}"
+
+  tasks:
+    - name: Fail fast if controller theme source directory is missing (local)
+      delegate_to: localhost
+      become: false
+      ansible.builtin.stat:
+        path: "{{ controller_theme_src }}"
+      register: controller_theme_dir
+
+    - name: Abort if controller theme source directory is missing (local)
+      delegate_to: localhost
+      become: false
+      ansible.builtin.fail:
+        msg: "Missing controller theme source dir: {{ controller_theme_src }}"
+      when: not controller_theme_dir.stat.exists
+
+    - name: Fail fast if controller header.php is missing (local)
+      delegate_to: localhost
+      become: false
+      ansible.builtin.stat:
+        path: "{{ controller_theme_src }}/header.php"
+      register: controller_header
+
+    - name: Abort if controller header.php is missing (local)
+      delegate_to: localhost
+      become: false
+      ansible.builtin.fail:
+        msg: "Missing controller file: {{ controller_theme_src }}/header.php"
+      when: not controller_header.stat.exists
+
+    - name: Fail fast if controller style.css is missing (local)
+      delegate_to: localhost
+      become: false
+      ansible.builtin.stat:
+        path: "{{ controller_theme_src }}/style.css"
+      register: controller_style
+
+    - name: Abort if controller style.css is missing (local)
+      delegate_to: localhost
+      become: false
+      ansible.builtin.fail:
+        msg: "Missing controller file: {{ controller_theme_src }}/style.css"
+      when: not controller_style.stat.exists
+
+    - name: Gather remote theme file facts
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}/header.php"
+      register: remote_header
+
+    - name: Backup remote header.php (timestamped)
+      ansible.builtin.copy:
+        src: "{{ theme_dir }}/header.php"
+        dest: "{{ theme_dir }}/header.php.bak.{{ ts }}"
+        remote_src: true
+        mode: preserve
+      when: remote_header.stat.exists
+
+    - name: Gather remote style.css facts
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}/style.css"
+      register: remote_style
+
+    - name: Backup remote style.css (timestamped)
+      ansible.builtin.copy:
+        src: "{{ theme_dir }}/style.css"
+        dest: "{{ theme_dir }}/style.css.bak.{{ ts }}"
+        remote_src: true
+        mode: preserve
+      when: remote_style.stat.exists
+
+    - name: Deploy corrected header.php (logo stays in nav row)
+      ansible.builtin.copy:
+        src: "{{ controller_theme_src }}/header.php"
+        dest: "{{ theme_dir }}/header.php"
+        owner: nginx
+        group: nginx
+        mode: '0644'
+
+    - name: Deploy corrected style.css (desktop no-wrap)
+      ansible.builtin.copy:
+        src: "{{ controller_theme_src }}/style.css"
+        dest: "{{ theme_dir }}/style.css"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Reload php-fpm (safe)
+      ansible.builtin.systemd:
+        name: php-fpm
+        state: reloaded
+      failed_when: false
+
+    - name: Reload nginx (safe)
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+      failed_when: false
+
+    - name: Print summary
+      ansible.builtin.debug:
+        msg:
+          - "Deployed header.php + style.css to: {{ theme_dir }}"
+          - "Backups created (if originals existed): *.bak.{{ ts }}"
+          - "Verify: https://motorcade.vip (logo should be in same row as menu + CTA on desktop)"

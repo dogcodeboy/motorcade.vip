@@ -1,0 +1,91 @@
+---
+# Playbook 36l — Fix "Built for real-world risk" card text readability
+#
+# What it does:
+# - Inserts a targeted CSS patch into the active theme's style.css (idempotent)
+# - The patch forces light text colors inside the Gutenberg "risk" section cards
+#
+# Requirements:
+# - The Gutenberg section wrapper should have class "mc-risk" (already used in earlier patches)
+#
+# Run:
+#   cd ~/Repos/motorcade.vip/ansible
+#   ansible-playbook -i inventories/prod/hosts.ini playbooks/36l_mc_risk_card_readability.yml --private-key ~/.ssh/motorcade-key.pem
+
+- name: "Playbook 36l - Risk card readability (mc-risk)"
+  hosts: web
+  become: true
+  gather_facts: true
+
+  vars:
+    wp_theme_slug: "motorcade-trust"
+    wp_theme_root: "/var/www/motorcade/wp-content/themes/{{ wp_theme_slug }}"
+    remote_style_css: "{{ wp_theme_root }}/style.css"
+    controller_patch_css: "{{ playbook_dir }}/../files/themes/{{ wp_theme_slug }}/theme_overrides/mc_risk_card_readability.css"
+
+  tasks:
+    - name: "Fail fast if controller patch CSS is missing"
+      delegate_to: localhost
+      become: false
+      ansible.builtin.stat:
+        path: "{{ controller_patch_css }}"
+      register: patch_css
+
+    - name: "Abort if controller patch CSS is missing"
+      delegate_to: localhost
+      become: false
+      ansible.builtin.assert:
+        that:
+          - patch_css.stat.exists
+        fail_msg: "Missing controller patch CSS: {{ controller_patch_css }}"
+
+    - name: "Fail fast if remote style.css is missing"
+      ansible.builtin.stat:
+        path: "{{ remote_style_css }}"
+      register: remote_style
+
+    - name: "Abort if remote style.css is missing"
+      ansible.builtin.assert:
+        that:
+          - remote_style.stat.exists
+        fail_msg: "Remote style.css not found at {{ remote_style_css }}"
+
+    - name: "Backup remote style.css (timestamped)"
+      ansible.builtin.copy:
+        src: "{{ remote_style_css }}"
+        dest: "{{ remote_style_css }}.bak.{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: "Insert/Update MC-RISK-CARD-READABILITY patch in style.css"
+      ansible.builtin.blockinfile:
+        path: "{{ remote_style_css }}"
+        marker: "/* {mark} MC-RISK-CARD-READABILITY (36l) */"
+        block: "{{ lookup('ansible.builtin.file', controller_patch_css) }}"
+        insertafter: EOF
+        create: false
+
+    - name: "Gather service facts"
+      ansible.builtin.service_facts:
+
+    - name: "Best-effort reload php-fpm if present"
+      ansible.builtin.service:
+        name: php-fpm
+        state: reloaded
+      when: "'php-fpm.service' in ansible_facts.services"
+      ignore_errors: true
+
+    - name: "Best-effort reload nginx if present"
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      when: "'nginx.service' in ansible_facts.services"
+      ignore_errors: true
+
+    - name: "Summary"
+      ansible.builtin.debug:
+        msg:
+          - "Applied risk card readability patch to: {{ remote_style_css }}"
+          - "Verify: https://motorcade.vip (Built for real-world risk card text should be readable)"

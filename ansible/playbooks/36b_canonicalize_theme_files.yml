@@ -1,0 +1,49 @@
+---
+- name: Playbook 36b — Canonicalize theme files on controller (local only)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Legacy nested vendored path (exists in your repo today):
+    #   ansible/ansible/ansible/files/themes/motorcade-trust/
+    src_theme_dir: "{{ playbook_dir }}/../ansible/ansible/files/themes/motorcade-trust"
+
+    # Canonical path used by the project going forward:
+    #   ansible/files/themes/motorcade-trust/
+    dst_theme_dir: "{{ playbook_dir }}/../files/themes/motorcade-trust"
+
+  tasks:
+    - name: Show controller paths
+      ansible.builtin.debug:
+        msg:
+          - "src_theme_dir={{ src_theme_dir }}"
+          - "dst_theme_dir={{ dst_theme_dir }}"
+
+    - name: Check legacy theme source exists
+      ansible.builtin.stat:
+        path: "{{ src_theme_dir }}"
+      register: src_stat
+
+    - name: Abort if legacy theme source is missing
+      ansible.builtin.fail:
+        msg: "Legacy theme source directory not found: {{ src_theme_dir }}"
+      when: not src_stat.stat.exists or not src_stat.stat.isdir
+
+    - name: Ensure canonical destination directory exists
+      ansible.builtin.file:
+        path: "{{ dst_theme_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy legacy theme into canonical location (recursive)
+      ansible.builtin.copy:
+        src: "{{ src_theme_dir }}/"
+        dest: "{{ dst_theme_dir }}/"
+        mode: preserve
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Canonicalized theme files into: {{ dst_theme_dir }}"
+          - "Next: re-run playbooks that reference ansible/files/themes/..."

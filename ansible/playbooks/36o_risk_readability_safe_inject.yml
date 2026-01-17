@@ -1,0 +1,201 @@
+---
+- name: "Playbook 36o - Risk section readability safe fix (no full file overwrites) [v2 path-safe]"
+  hosts: motorcade_web
+  become: true
+
+  vars:
+    theme_slug: "motorcade-trust"
+    wp_root: "/var/www/motorcade"
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    style_css: "{{ theme_dir }}/style.css"
+    functions_php: "{{ theme_dir }}/functions.php"
+
+    # IMPORTANT: src paths must be controller-absolute so they work regardless of cwd.
+    js_controller: "{{ playbook_dir }}/../files/themes/motorcade-trust/assets/js/mc_risk_dom_hook.js"
+    js_remote: "{{ theme_dir }}/assets/js/mc_risk_dom_hook.js"
+
+    css_marker_begin: "/* BEGIN MC-RISK-CARD-READABILITY (36o) */"
+    css_marker_end: "/* END MC-RISK-CARD-READABILITY (36o) */"
+
+    fn_marker_begin: "// BEGIN MC-RISK-DOM-HOOK (36o)"
+    fn_marker_end: "// END MC-RISK-DOM-HOOK (36o)"
+
+  tasks:
+    - name: Gather theme facts
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}"
+      register: theme_dir_stat
+
+    - name: Abort if theme directory is missing
+      ansible.builtin.fail:
+        msg: "Theme directory not found: {{ theme_dir }}"
+      when: not theme_dir_stat.stat.exists
+
+    - name: Find newest backup of style.css (created by prior playbooks)
+      ansible.builtin.shell: |
+        set -e
+        ls -1t "{{ style_css }}".bak.* 2>/dev/null | head -n 1 || true
+      args:
+        executable: /bin/bash
+      register: newest_style_backup
+      changed_when: false
+
+    - name: Find newest backup of functions.php (created by prior playbooks)
+      ansible.builtin.shell: |
+        set -e
+        ls -1t "{{ functions_php }}".bak.* 2>/dev/null | head -n 1 || true
+      args:
+        executable: /bin/bash
+      register: newest_functions_backup
+      changed_when: false
+
+    - name: Restore style.css from newest backup (if present)
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ newest_style_backup.stdout }}"
+        dest: "{{ style_css }}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+      when: newest_style_backup.stdout | length > 0
+
+    - name: Restore functions.php from newest backup (if present)
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ newest_functions_backup.stdout }}"
+        dest: "{{ functions_php }}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+      when: newest_functions_backup.stdout | length > 0
+
+    - name: Ensure remote assets/js directory exists
+      ansible.builtin.file:
+        path: "{{ theme_dir }}/assets/js"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0755"
+
+    - name: Assert controller DOM hook JS exists (path-safe)
+      ansible.builtin.stat:
+        path: "{{ js_controller }}"
+      delegate_to: localhost
+      become: false
+      register: js_stat
+
+    - name: Abort if controller JS is missing
+      ansible.builtin.fail:
+        msg: "Missing controller file: {{ js_controller }} (expected inside repo under ansible/files/...)"
+      when: not js_stat.stat.exists
+      delegate_to: localhost
+      become: false
+
+    - name: Upload DOM hook JS (adds .mc-risk class to the correct block container)
+      ansible.builtin.copy:
+        src: "{{ js_controller }}"
+        dest: "{{ js_remote }}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+
+    - name: Inject enqueue hook into functions.php (idempotent)
+      ansible.builtin.blockinfile:
+        path: "{{ functions_php }}"
+        marker: "{{ fn_marker_begin }} {mark} {{ fn_marker_end }}"
+        insertafter: "EOF"
+        block: |
+          add_action('wp_enqueue_scripts', function () {
+            // Risk section DOM hook (adds .mc-risk class at runtime)
+            wp_enqueue_script(
+              'mc-risk-dom-hook',
+              get_stylesheet_directory_uri() . '/assets/js/mc_risk_dom_hook.js',
+              array(),
+              null,
+              true
+            );
+          });
+
+    - name: Inject/Update scoped risk readability CSS in style.css (idempotent)
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "{{ css_marker_begin }} {mark} {{ css_marker_end }}"
+        insertafter: EOF
+        block: |
+          /* 36o: Scope ALL readability tweaks to the risk section ONLY.
+             This intentionally avoids ANY global img/icon sizing rules. */
+
+          .mc-risk { position: relative; }
+
+          /* Ensure text inside the dark section is readable */
+          .mc-risk,
+          .mc-risk h1,
+          .mc-risk h2,
+          .mc-risk h3,
+          .mc-risk h4,
+          .mc-risk h5,
+          .mc-risk h6,
+          .mc-risk p,
+          .mc-risk li,
+          .mc-risk a,
+          .mc-risk .wp-block-button__link {
+            color: #ffffff !important;
+          }
+
+          /* Card readability: apply to common Gutenberg wrappers inside the section */
+          .mc-risk .wp-block-column,
+          .mc-risk .wp-block-group,
+          .mc-risk .wp-block-cover__inner-container {
+            background: rgba(7, 16, 32, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
+            -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
+          }
+
+          .mc-risk .wp-block-group__inner-container,
+          .mc-risk .wp-block-cover__inner-container {
+            padding-left: 12px;
+            padding-right: 12px;
+          }
+
+          .mc-risk h1,
+          .mc-risk h2,
+          .mc-risk h3,
+          .mc-risk p,
+          .mc-risk li {
+            text-shadow: 0 2px 12px rgba(0,0,0,0.55);
+          }
+
+          /* Do NOT resize images globally; keep images responsive within cards */
+          .mc-risk .wp-block-image img {
+            max-width: 100%;
+            height: auto;
+          }
+
+          .mc-risk a {
+            text-decoration: underline;
+            text-underline-offset: 3px;
+          }
+
+    - name: Best-effort reload php-fpm if present (Amazon Linux 2023)
+      ansible.builtin.shell: |
+        set -e
+        systemctl reload php-fpm || true
+      args:
+        executable: /bin/bash
+
+    - name: Best-effort reload nginx
+      ansible.builtin.shell: |
+        set -e
+        systemctl reload nginx || true
+      args:
+        executable: /bin/bash
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Restored style.css/functions.php from newest .bak.* files (if present) to undo prior accidental global styling."
+          - "Injected scoped CSS into: {{ style_css }}"
+          - "Uploaded + enqueued JS: {{ js_remote }}"
+          - "Hard-refresh (Ctrl+F5). Verify: risk cards text readable AND header/icons normal."

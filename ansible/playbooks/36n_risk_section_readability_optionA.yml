@@ -1,0 +1,96 @@
+---
+# Playbook 36n - Fix "Built for real-world risk" readability (Option A: DOM hook + CSS)
+#
+# Why: This section is Gutenberg-rendered, so earlier CSS-only patches missed the real container.
+# This playbook deploys a tiny front-end script that tags the section with class `mc-risk` and
+# then applies readability CSS scoped to that class.
+
+- name: Playbook 36n - Risk section readability (DOM hook + CSS)
+  hosts: motorcade_web
+  become: true
+  vars:
+    theme_slug: "motorcade-trust"
+    wp_root: "/var/www/motorcade"
+    theme_dir_remote: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    theme_dir_local: "{{ playbook_dir }}/../files/themes/{{ theme_slug }}"
+    js_rel: "assets/js/mc_risk_dom_hook.js"
+
+  tasks:
+    - name: Fail fast if controller theme files are missing
+      delegate_to: localhost
+      become: false
+      ansible.builtin.assert:
+        that:
+          - theme_dir_local is directory
+          - (theme_dir_local + '/style.css') is file
+          - (theme_dir_local + '/functions.php') is file
+          - (theme_dir_local + '/' + js_rel) is file
+        fail_msg: "Controller theme files missing under {{ theme_dir_local }}. Ensure you unzipped the patch into repo root."
+
+    - name: Gather remote theme facts
+      ansible.builtin.stat:
+        path: "{{ theme_dir_remote }}/style.css"
+      register: remote_style
+
+    - name: Abort if remote theme not found
+      ansible.builtin.assert:
+        that:
+          - remote_style.stat.exists
+        fail_msg: "Remote theme not found at {{ theme_dir_remote }}. Check theme slug and WP root."
+
+    - name: Backup remote style.css (timestamped)
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ theme_dir_remote }}/style.css"
+        dest: "{{ theme_dir_remote }}/style.css.bak.{{ ansible_date_time.iso8601_basic_short }}"
+        mode: preserve
+
+    - name: Backup remote functions.php (timestamped)
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ theme_dir_remote }}/functions.php"
+        dest: "{{ theme_dir_remote }}/functions.php.bak.{{ ansible_date_time.iso8601_basic_short }}"
+        mode: preserve
+
+    - name: Ensure JS assets directory exists on remote
+      ansible.builtin.file:
+        path: "{{ theme_dir_remote }}/assets/js"
+        state: directory
+        mode: "0755"
+
+    - name: Deploy updated theme style.css (includes MC-RISK-CARD-READABILITY 36n)
+      ansible.builtin.copy:
+        src: "{{ theme_dir_local }}/style.css"
+        dest: "{{ theme_dir_remote }}/style.css"
+        mode: "0644"
+
+    - name: Deploy updated theme functions.php (enqueues mc_risk_dom_hook.js)
+      ansible.builtin.copy:
+        src: "{{ theme_dir_local }}/functions.php"
+        dest: "{{ theme_dir_remote }}/functions.php"
+        mode: "0644"
+
+    - name: Deploy DOM hook JS
+      ansible.builtin.copy:
+        src: "{{ theme_dir_local }}/{{ js_rel }}"
+        dest: "{{ theme_dir_remote }}/{{ js_rel }}"
+        mode: "0644"
+
+    - name: Best-effort reload php-fpm if present (Amazon Linux 2023)
+      ansible.builtin.service:
+        name: php-fpm
+        state: reloaded
+      ignore_errors: true
+
+    - name: Best-effort reload nginx if present
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      ignore_errors: true
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Deployed Option A (DOM hook + CSS) to {{ theme_dir_remote }}"
+          - "Verify on site: the 'Built for real-world risk' section card titles/body text should be readable."
+          - "If browser cache is sticky, hard-refresh (Ctrl+F5)."

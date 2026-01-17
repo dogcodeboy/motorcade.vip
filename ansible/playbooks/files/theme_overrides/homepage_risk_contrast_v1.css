@@ -1,0 +1,42 @@
+/* === MOTORCADE: Risk-section contrast patch (managed) === */
+/*
+Fix for homepage section “Built for real-world risk”.
+Symptoms: card titles/body text became too dark on a dark background, reducing readability.
+This patch forces high-contrast text + appropriate translucent card background inside .mc-risk.
+*/
+
+body.home .mc-risk .mc-service{
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+}
+
+body.home .mc-risk .mc-service__body{
+  background: rgba(15,23,42,0.62) !important;
+}
+
+body.home .mc-risk .mc-service__body h3,
+body.home .mc-risk .mc-service__body p,
+body.home .mc-risk .mc-service__body li{
+  color: rgba(255,255,255,0.92) !important;
+}
+
+body.home .mc-risk .mc-service__body p{
+  color: rgba(255,255,255,0.80) !important;
+}
+
+body.home .mc-risk .mc-service__body a{
+  color: rgba(255,255,255,0.92) !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+body.home .mc-risk .mc-service__body a:hover,
+body.home .mc-risk .mc-service__body a:focus{
+  color: #ffffff !important;
+}
+
+/* Ensure icon badge doesn’t wash out */
+body.home .mc-risk .mc-service__icon{
+  background: rgba(255,255,255,0.12) !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+}

@@ -1,0 +1,61 @@
+---
+# Playbook 36i — Fix 'Built for real-world risk' contrast
+# Purpose: Force readable text colors inside the dark risk section cards.
+# Safe: idempotent, uses a managed block marker.
+
+- name: "Playbook 36i — Fix risk-section contrast"
+  hosts: web
+  become: true
+
+  vars:
+    theme_dir: "/var/www/motorcade/wp-content/themes/motorcade-trust"
+    style_css: "{{ theme_dir }}/style.css"
+    patch_src: "{{ playbook_dir }}/files/theme_overrides/homepage_risk_contrast_v1.css"
+
+  tasks:
+    - name: "Fail fast if theme style.css not found"
+      ansible.builtin.stat:
+        path: "{{ style_css }}"
+      register: style_stat
+
+    - name: "Abort if theme style.css is missing"
+      ansible.builtin.fail:
+        msg: "Missing theme file: {{ style_css }}"
+      when: not style_stat.stat.exists
+
+    - name: "Backup style.css (timestamped)"
+      ansible.builtin.copy:
+        src: "{{ style_css }}"
+        dest: "{{ style_css }}.bak.{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+        mode: preserve
+
+    - name: "Read contrast patch content"
+      ansible.builtin.slurp:
+        src: "{{ patch_src }}"
+      register: patch_blob
+      delegate_to: localhost
+      become: false
+
+    - name: "Apply managed contrast patch to style.css"
+      ansible.builtin.blockinfile:
+        path: "{{ style_css }}"
+        marker: "/* {mark} MOTORCADE RISK CONTRAST PATCH */"
+        insertafter: EOF
+        block: "{{ (patch_blob.content | b64decode).strip() }}"
+
+    - name: "Best-effort reload nginx (if present)"
+      ansible.builtin.shell: |
+        set -e
+        if command -v systemctl >/dev/null 2>&1; then
+          systemctl reload nginx >/dev/null 2>&1 || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: "Summary"
+      ansible.builtin.debug:
+        msg:
+          - "Applied risk-section contrast patch to: {{ style_css }}"
+          - "Verify: https://motorcade.vip — 'Built for real-world risk' card titles/body text should be readable."

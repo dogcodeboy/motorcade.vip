@@ -1,0 +1,124 @@
+---
+# Playbook 36m — Add DOM hook for "Built for real-world risk" section + enforce card readability
+# Fixes the root cause: Gutenberg section lacks stable class, so prior CSS didn't apply.
+
+- name: Playbook 36m — Risk section DOM hook + readability CSS
+  hosts: web
+  become: true
+  vars:
+    wp_root: /var/www/motorcade
+    theme_slug: motorcade-trust
+    theme_dir: "{{ wp_root }}/wp-content/themes/{{ theme_slug }}"
+    theme_js_dir: "{{ theme_dir }}/assets/js"
+    theme_overrides_dir: "{{ theme_dir }}/theme_overrides"
+    dom_script_name: mc_dom_enhance.js
+    dom_script_path: "{{ theme_js_dir }}/{{ dom_script_name }}"
+    risk_css_name: mc_risk_card_readability.css
+    risk_css_path: "{{ theme_overrides_dir }}/{{ risk_css_name }}"
+
+  tasks:
+    - name: Gather theme file facts
+      ansible.builtin.stat:
+        path: "{{ theme_dir }}/functions.php"
+      register: theme_functions
+
+    - name: Abort if theme functions.php is missing
+      ansible.builtin.fail:
+        msg: "Theme not found at {{ theme_dir }}"
+      when: not theme_functions.stat.exists
+
+    - name: Ensure JS directory exists
+      ansible.builtin.file:
+        path: "{{ theme_js_dir }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0755"
+
+    - name: Ensure overrides directory exists
+      ansible.builtin.file:
+        path: "{{ theme_overrides_dir }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0755"
+
+    - name: Deploy DOM enhancer script
+      ansible.builtin.copy:
+        src: "files/themes/{{ theme_slug }}/assets/js/{{ dom_script_name }}"
+        dest: "{{ dom_script_path }}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+
+    - name: Deploy risk readability CSS
+      ansible.builtin.copy:
+        src: "files/themes/{{ theme_slug }}/theme_overrides/{{ risk_css_name }}"
+        dest: "{{ risk_css_path }}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+
+    - name: Ensure theme enqueues the DOM script + risk CSS (idempotent)
+      ansible.builtin.blockinfile:
+        path: "{{ theme_dir }}/functions.php"
+        marker: "// {mark} MC_RISK_DOM_AND_CSS (36m)"
+        insertafter: EOF
+        block: |
+          
+          /**
+           * 36m — Risk section DOM hook + CSS overrides
+           * Adds .mc-risk class to the "Built for real-world risk" section, then applies readability CSS.
+           */
+          add_action('wp_enqueue_scripts', function () {
+            if (!is_front_page()) { return; }
+            $theme_uri = get_stylesheet_directory_uri();
+            $theme_dir = get_stylesheet_directory();
+
+            $css_rel = '/theme_overrides/mc_risk_card_readability.css';
+            $js_rel  = '/assets/js/mc_dom_enhance.js';
+
+            $css_path = $theme_dir . $css_rel;
+            $js_path  = $theme_dir . $js_rel;
+
+            wp_enqueue_style(
+              'mc-risk-card-readability',
+              $theme_uri . $css_rel,
+              array(),
+              file_exists($css_path) ? filemtime($css_path) : null
+            );
+
+            wp_enqueue_script(
+              'mc-dom-enhance',
+              $theme_uri . $js_rel,
+              array(),
+              file_exists($js_path) ? filemtime($js_path) : null,
+              true
+            );
+          }, 30);
+
+    - name: Best-effort reload php-fpm if present (Amazon Linux 2023)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if systemctl list-unit-files | grep -q '^php-fpm\.service'; then
+          systemctl reload php-fpm || systemctl restart php-fpm
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Best-effort reload nginx
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if systemctl list-unit-files | grep -q '^nginx\.service'; then
+          systemctl reload nginx || systemctl restart nginx
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Applied DOM hook + CSS overrides to: {{ theme_dir }}"
+          - "Verify: https://motorcade.vip — the 'Built for real-world risk' cards should have readable text"

@@ -1,0 +1,37 @@
+---
+- name: "Playbook 36h — Cleanup legacy ansible/ansible nesting (controller-side)"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    legacy_dir: "{{ repo_root }}/ansible/ansible"
+
+  tasks:
+    - name: "Explain"
+      debug:
+        msg:
+          - "This playbook removes the accidental ansible/ansible/... directory tree on your local repo."
+          - "It does NOT touch the server."
+
+    - name: "Check if legacy nesting exists"
+      stat:
+        path: "{{ legacy_dir }}"
+      register: legacy
+
+    - name: "Skip if not present"
+      debug:
+        msg: "No legacy nesting found at {{ legacy_dir }}"
+      when: not legacy.stat.exists
+
+    - name: "Delete legacy nesting directory"
+      file:
+        path: "{{ legacy_dir }}"
+        state: absent
+      when: legacy.stat.exists
+
+    - name: "Summary"
+      debug:
+        msg:
+          - "Removed legacy nesting: {{ legacy_dir }}"
+          - "Canonical controller theme path remains: ansible/files/themes/motorcade-trust/"

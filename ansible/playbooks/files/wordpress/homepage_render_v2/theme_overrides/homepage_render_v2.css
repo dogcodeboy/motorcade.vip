@@ -237,8 +237,8 @@
   padding: 14px 14px 16px;
 }
 
-.mc-card__title { color: #fff; font-weight: 700; margin: 0 0 6px; }
-.mc-card__text { color: rgba(255,255,255,0.72); margin: 0 0 10px; }
+.mc-card__title { color: #fff; font-weight: 800; margin: 0 0 6px; letter-spacing: 0.2px; }
+.mc-card__text { color: rgba(255,255,255,0.90); margin: 0 0 10px; }
 .mc-card__link { color: rgba(147,197,253,0.95); text-decoration: none; font-weight: 600; }
 
 /* Responsive */

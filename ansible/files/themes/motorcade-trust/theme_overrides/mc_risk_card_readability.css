@@ -1,0 +1,63 @@
+/* Motorcade Trust — Risk section readability
+   Requires DOM hook: .mc-risk (added via assets/js/mc_dom_enhance.js)
+*/
+
+/* Baseline: ensure text doesn't inherit low-contrast colors inside the dark section */
+.mc-risk,
+.mc-risk * {
+  color: #f8fafc !important;
+}
+
+.mc-risk a {
+  color: #93c5fd !important;
+}
+
+/* Cards: Gutenberg layouts vary; cover common patterns */
+.mc-risk .wp-block-columns .wp-block-column > .wp-block-group,
+.mc-risk .wp-block-columns .wp-block-column > .wp-block-cover,
+.mc-risk .wp-block-columns .wp-block-column > .wp-block-media-text,
+.mc-risk .wp-block-columns .wp-block-column > .wp-block-group.has-background {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(148, 163, 184, 0.20) !important;
+  border-radius: 18px !important;
+  overflow: hidden !important;
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.45) !important;
+}
+
+/* Prevent any inherited opacity/filters that are killing readability */
+.mc-risk .wp-block-columns .wp-block-column,
+.mc-risk .wp-block-columns .wp-block-column * {
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+/* Tighten typography inside cards */
+.mc-risk .wp-block-columns .wp-block-column h1,
+.mc-risk .wp-block-columns .wp-block-column h2,
+.mc-risk .wp-block-columns .wp-block-column h3,
+.mc-risk .wp-block-columns .wp-block-column h4 {
+  color: #ffffff !important;
+}
+
+.mc-risk .wp-block-columns .wp-block-column p,
+.mc-risk .wp-block-columns .wp-block-column li {
+  color: #e2e8f0 !important;
+}
+
+/* If a cover block is used, ensure its inner container isn't darkened */
+.mc-risk .wp-block-cover .wp-block-cover__inner-container {
+  background: transparent !important;
+}
+
+/* Buttons/"Learn more" links */
+.mc-risk .wp-block-button__link {
+  color: #0b1b33 !important;
+  background: #e2e8f0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+}
+
+/* Icon pills inside cards */
+.mc-risk svg,
+.mc-risk img {
+  opacity: 1 !important;
+}

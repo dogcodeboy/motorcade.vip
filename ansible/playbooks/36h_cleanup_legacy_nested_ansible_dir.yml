@@ -1,0 +1,35 @@
+---
+- name: "Playbook 36h — Cleanup legacy nested ansible/ansible/ansible directory"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    legacy_dir: "{{ playbook_dir }}/../ansible"  # repo/ansible/ansible
+
+  tasks:
+    - name: "Check if legacy nested ansible dir exists"
+      stat:
+        path: "{{ legacy_dir }}"
+      register: legacy
+
+    - name: "Explain what will happen"
+      debug:
+        msg:
+          - "Legacy dir: {{ legacy_dir }}"
+          - "This playbook removes the accidental nested folder tree created by earlier zip extraction."
+          - "It does NOT touch your canonical Ansible files under ansible/files/..."
+      when: legacy.stat.exists
+
+    - name: "Remove legacy nested ansible dir"
+      file:
+        path: "{{ legacy_dir }}"
+        state: absent
+      when: legacy.stat.exists
+
+    - name: "Summary"
+      debug:
+        msg:
+          - "Removed legacy dir: {{ legacy_dir }}"
+          - "If git shows many deletions under ansible/ansible/, that's expected. Commit the cleanup."
+      when: legacy.stat.exists

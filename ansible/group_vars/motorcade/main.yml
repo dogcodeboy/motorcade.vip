@@ -14,3 +14,6 @@ wp_admin_email: "{{ vault_wp_admin_email }}"
 wp_site_url: "{{ vault_wp_site_url }}"
 wp_site_title: "{{ vault_wp_site_title }}"
 
+#Texas DPS license Number
+dps_license_number: "B31011701"
+
